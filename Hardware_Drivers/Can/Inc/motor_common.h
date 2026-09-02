@@ -10,6 +10,7 @@ typedef struct
     float kd;
     float integral;
     float integral_limit;
+    float integral_separation_error;
     float output_limit;
     float previous_measurement;
     uint8_t initialized;
@@ -30,6 +31,10 @@ void MotorSpeedPid_Init(MotorSpeedPid_t *pid, float kp, float ki,
 void MotorSpeedPid_Reset(MotorSpeedPid_t *pid);
 void MotorSpeedPid_SetGains(MotorSpeedPid_t *pid, float kp, float ki,
                             float kd);
+/* Error magnitude above this threshold disables integration.  A value of zero
+ * keeps the legacy behaviour (no error-based separation). */
+void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
+                                         float error_limit);
 int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
                                 float measured_rpm, float dt_s);
 void DjiMotor_DecodeFeedback(DjiMotorFeedback_t *feedback,

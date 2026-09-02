@@ -25,6 +25,8 @@ void Launch_Task(void *argument)
                            LAUNCH_M3508_ID2_SPEED_KP,
                            LAUNCH_M3508_ID2_SPEED_KI,
                            LAUNCH_M3508_ID2_SPEED_KD);
+    MotorSpeedPid_SetIntegralSeparation(&can1_m3508_id2.speed_pid,
+        LAUNCH_M3508_ID2_INTEGRAL_SEPARATION_RPM);
     M3508_SetSpeedFilterAlpha(&can1_m3508_id2,
                               LAUNCH_M3508_ID2_SPEED_LPF_ALPHA);
     MotorSpeedPid_Init(&can1_m3508_id3.speed_pid,
@@ -36,6 +38,8 @@ void Launch_Task(void *argument)
                            LAUNCH_M3508_ID3_SPEED_KP,
                            LAUNCH_M3508_ID3_SPEED_KI,
                            LAUNCH_M3508_ID3_SPEED_KD);
+    MotorSpeedPid_SetIntegralSeparation(&can1_m3508_id3.speed_pid,
+        LAUNCH_M3508_ID3_INTEGRAL_SEPARATION_RPM);
     M3508_SetSpeedFilterAlpha(&can1_m3508_id3,
                               LAUNCH_M3508_ID3_SPEED_LPF_ALPHA);
     MotorSpeedPid_Init(&can2_m2006_id5.speed_pid,
@@ -47,6 +51,8 @@ void Launch_Task(void *argument)
                            LAUNCH_M2006_ID5_SPEED_KP,
                            LAUNCH_M2006_ID5_SPEED_KI,
                            LAUNCH_M2006_ID5_SPEED_KD);
+    MotorSpeedPid_SetIntegralSeparation(&can2_m2006_id5.speed_pid,
+        LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM);
     M2006_SetSpeedFilterAlpha(&can2_m2006_id5,
                               LAUNCH_M2006_ID5_SPEED_LPF_ALPHA);
 

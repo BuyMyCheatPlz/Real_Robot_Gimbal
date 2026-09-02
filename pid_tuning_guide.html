@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>重载步兵云台 PID 整定指南</title>
+<style>
+body{max-width:900px;margin:36px auto;padding:0 20px;font:16px/1.65 system-ui;color:#1d2939}h1,h2{color:#0b4f6c}code{background:#edf2f7;padding:2px 5px;border-radius:4px}.warn{border-left:4px solid #d97706;background:#fff7ed;padding:12px 16px}.ok{border-left:4px solid #15803d;background:#f0fdf4;padding:12px 16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #cbd5e1;padding:8px;text-align:left}th{background:#e0f2fe}
+</style>
+<h1>重载步兵云台：30° / 300 ms / ±0.2° 整定</h1>
+<p>目标是对 Pitch、Yaw 分开做 30° 阶跃，在 <b>300 ms 内进入并随后保持</b>在目标 ±0.2°。不能只看第一次越过目标的时间；只要之后又越界，就还没有稳定。</p>
+<div class="warn"><b>安全：</b>先限制输出、设置软限位、让急停/断电可达。每次只改一个参数，且一次增幅不超过 10%–20%。若持续振荡、撞限位、CAN 故障或温升异常，立刻置零并回退到上一个稳定参数。</div>
+<h2>0. 先确认能测到结果</h2>
+<p>当前 VOFA 每 10 ms 输出目标/实际 Pitch、Yaw 角度；300 ms 内约有 30 个点，足够做初筛。验收时建议额外记录 1 kHz 的目标角度、实际角度、实际速度、速度环输出和前馈电流，或用同步的高速视频复核。0.2° 已接近滤波和机械回差会显著影响的量级。</p>
+<p>测试动作固定为：同一初始姿态，+30°，静止至少 1 s；再 -30°，静止至少 1 s。每轴各做至少 10 次，记录最慢一次的稳定时间和最终误差。</p>
+<h2>1. 机械与方向检查</h2>
+<ol><li>装上比赛负载；Pitch 轴尽量做静态配平。配平差会让 Ki 和重力前馈承担不该承担的持续力矩。</li><li>先将 Ki、Kd、重力前馈设为 0，低输出下确认正向目标产生正向运动；方向错先改 <code>PITCH_MOTOR_SIGN</code> 或 <code>YAW_MOTOR_SIGN</code>，不要用负 Kp 补救。</li><li>确认 30° 不会碰到 <code>PITCH_SOFT_LIMIT_DEG</code> / <code>YAW_SOFT_LIMIT_DEG</code>。</li></ol>
+<h2>2. 先调速度内环（每一轴独立）</h2>
+<p>外位置环先关小：将位置 Kp 暂时设得很小、Ki/Kd=0；直接给小速度台阶。速度环输出分别是 Pitch 的 GM6020 控制量与 Yaw 的 DM4310 电流。先用不超过比赛允许且机械可承受的 25%–35% 输出上限开始。</p>
+<ol><li><b>Ki=Kd=0</b>，逐次增加速度 <b>Kp</b>，直到开始出现连续振铃；回退 20%–30%。</li><li>若速度反馈噪声可接受，再少量增加速度 <b>Kd</b> 抑制过冲；噪声放大或高频抖动就减小 Kd。</li><li>最后小步增加速度 <b>Ki</b>，仅用于消除静摩擦/负载带来的持续速度误差。出现低频摆动就减小 Ki。</li></ol>
+<p>当前参数：Pitch <code>PITCH_SPEED_*</code>，Yaw <code>YAW_SPEED_*</code>。DM4310 Yaw 的输出上限 <code>YAW_CURRENT_OUTPUT_LIMIT=3000</code>，明显低于协议 ±16384；第一次整定不要上调。</p>
+<h2>3. 再调位置外环</h2>
+<ol><li>位置 <b>Ki=Kd=0</b>，逐次提高位置 <b>Kp</b>。Kp 加大通常使响应更快，但若出现越过目标后的振铃，说明已接近稳定裕量边界。</li><li>为降低过冲和缩短稳定时间，小步增加位置 <b>Kd</b>。Kd 依赖测量速度，编码器噪声或滤波相位滞后会使它过早引发抖动。</li><li>在 Kp/Kd 达标后才加极小位置 <b>Ki</b>；它只修正持续静差。若 0.2° 已靠重力前馈解决，位置 Ki 应保持很小甚至为 0。</li></ol>
+<p>TI 的调参资料同样建议先确定 Kp/Kd，再加入 Ki；Ki 过大将降低稳定裕度。<a href="https://www.ti.com/lit/pdf/snoa184">TI AN-706</a></p>
+<h2>4. Yaw 轨迹、速度前馈与加速度力矩前馈</h2>
+<p>Yaw 不再直接对 30° 位置阶跃做差分。控制器先生成限速度、限加速度的轨迹，再得到三个参考量：<code>θ_ref</code>（位置）、<code>ω_ref</code>（速度）、<code>α_ref</code>（加速度）。速度前馈和加速度力矩前馈分别为：</p>
+<pre><code>速度目标 = 位置 PID 输出 + YAW_VELOCITY_FF_GAIN × ω_ref
+电流前馈 = YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 × α_ref</code></pre>
+<p>加速度前馈在进入 DM4310 前会受 <code>YAW_ACCELERATION_FF_CURRENT_LIMIT</code> 限制，叠加到速度 PID 后的总电流仍受 <code>YAW_CURRENT_OUTPUT_LIMIT</code> 限制。</p>
+<table><tr><th>参数</th><th>单位 / 直观含义</th><th>首轮建议</th></tr><tr><td><code>YAW_TRAJECTORY_MAX_SPEED_RAD_S</code></td><td>rad/s；轨迹最高速度</td><td>3.0，确认安全后再向 3.5–4.0 提升</td></tr><tr><td><code>YAW_TRAJECTORY_MAX_ACCEL_RAD_S2</code></td><td>rad/s²；起步和刹车的最大加速度</td><td>30；重载可从 20 起步</td></tr><tr><td><code>YAW_VELOCITY_FF_GAIN</code></td><td>无量纲；0 为关闭，1 为全量使用轨迹速度</td><td>从 0 开始，每次 +0.2</td></tr><tr><td><code>YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2</code></td><td>DM4310 CAN 电流计数/(rad/s²)</td><td>从 0 开始，每次 +5</td></tr><tr><td><code>YAW_ACCELERATION_FF_CURRENT_LIMIT</code></td><td>CAN 电流计数；仅限制该前馈分量</td><td>800</td></tr></table>
+<p><b>推荐操作：</b>先固定轨迹速度/加速度，把两个前馈系数都设为 0，调好 PID；随后只加速度前馈增益，再只加加速度前馈系数。举例：若 <code>α_ref=30 rad/s²</code>、系数设为 <code>20</code>，则理论电流前馈为 <code>600</code> 个 CAN 电流计数。</p>
+<table><tr><th>曲线现象</th><th>优先调整</th></tr><tr><td>起步滞后、全程落后轨迹，且电流未打满</td><td>增加 <code>YAW_VELOCITY_FF_GAIN</code></td></tr><tr><td>起步与刹车阶段无力，中段已能跟上</td><td>小步增加加速度前馈系数</td></tr><tr><td>起步前冲、速度/电流尖峰、末端过冲增大</td><td>减小加速度前馈系数或轨迹最大加速度</td></tr><tr><td>速度目标或最终电流持续打满</td><td>先降低轨迹速度/加速度；不要继续增加前馈</td></tr><tr><td>正向动作变慢或反向加速</td><td>停止测试，检查 <code>YAW_MOTOR_SIGN</code> 与反馈方向；不要用负前馈掩盖方向错误</td></tr></table>
+<div class="warn"><b>300 ms 指标提示：</b>30° = 0.524 rad。若轨迹最大速度为 2 rad/s，仅走完轨迹就约需 262 ms，几乎没有闭环稳定余量。首轮可从 3 rad/s、30 rad/s² 开始，但必须先确认电流和机械限位安全。</div>
+<h2>5. Pitch 重力前馈：用它消除“仰角越大越吃力”</h2>
+<p>代码使用 <code>FF = SIGN × MAX × cos(pitch - ZERO)</code>。令 Pitch 静止在多个角度，且 Ki=0：</p>
+<ol><li>找出重力矩最大的姿态；调 <code>PITCH_GRAVITY_ZERO_RAD</code>，使该姿态的余弦绝对值接近 1。</li><li>从 <code>PITCH_GRAVITY_FF_MAX_VOLTAGE=0</code> 开始，每次增加 5%–10%，直到该姿态不再明显下垂且不会上冲。</li><li>若各姿态的补偿方向相反，改 <code>PITCH_GRAVITY_SIGN</code>，不要把 MAX 设为负数。</li></ol>
+<p>它是当前 GM6020 命令单位的前馈，不是物理电压标定值。前馈对恒定重力力矩有效，不能替代速度/位置环的阻尼。</p>
+<h2>6. 滤波、积分与验收</h2>
+<table><tr><th>参数</th><th>增大后的作用 / 风险</th></tr><tr><td><code>*_LPF_ALPHA</code></td><td>趋近 1：更快、噪声更大；趋近 0：更平滑、相位滞后更大。先保持 0.15–0.20，只有确认噪声或延迟是问题时再调。</td></tr><tr><td><code>*_INTEGRAL_LIMIT_*</code></td><td>限制积分项最大输出。只需略大于补偿静摩擦和残余重力所需值；过大增加解除饱和后的过冲。</td></tr><tr><td><code>*_INTEGRAL_SEPARATION_*</code></td><td>大误差时禁止积分。阈值应小于 30° 阶跃、但大于最终需消除的残差；当前 Pitch 10°、Yaw 20° 是起点。</td></tr><tr><td><code>*_OUTPUT_LIMIT</code></td><td>功率/电流安全边界。它若限制过低，300 ms 目标不可能实现；先测出不饱和的机械能力，再决定是否上调。</td></tr></table>
+<div class="ok"><b>每轮验收：</b>记录峰值误差、最大过冲、首次进入 ±0.2° 的时间、最后一次离开 ±0.2° 的时间、最终误差、输出是否饱和。只有“最后一次离开”的时间 ≤300 ms，才算通过。</div>
+<p>参考：<a href="https://edgeworker.ti.com/lit/pdf/slaa503">TI BLDC 闭环说明</a>；<a href="https://www.ti.com/lit/pdf/snoa184">TI PID/阶跃整定说明</a>；<a href="https://www.robomaster.com/en-US/robo/rm?djifrom=nav">RoboMaster 官方资源</a>。</p>

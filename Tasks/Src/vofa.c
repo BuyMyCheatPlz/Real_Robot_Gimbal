@@ -15,6 +15,7 @@
 static UART_HandleTypeDef *vofa_uart;
 static uint8_t rx_dma_buffer[VOFA_RX_DMA_LENGTH];
 static char assembling_command[VOFA_COMMAND_MAX_LENGTH];
+//
 static volatile uint16_t assembling_length;
 static char completed_command[VOFA_COMMAND_QUEUE_DEPTH][VOFA_COMMAND_MAX_LENGTH];
 static volatile uint8_t command_read_index;
@@ -148,8 +149,10 @@ void VOFA_print(void *argument)
 {
     GimbalControlState_t snapshot;
     uint32_t primask;
+    uint32_t wake_tick;
     (void)argument;
     (void)VOFA_Init(&huart4);
+    wake_tick = osKernelGetTickCount();
 
     for (;;)
     {
@@ -163,6 +166,8 @@ void VOFA_print(void *argument)
             normalize_degrees(snapshot.pitch_encoder_rad),
             normalize_degrees(snapshot.yaw_target_rad),
             normalize_degrees(snapshot.yaw_encoder_rad));
-        osDelay(VOFA_PERIOD_MS);
+        wake_tick += VOFA_PERIOD_MS;
+        if (osDelayUntil(wake_tick) != osOK)
+            wake_tick = osKernelGetTickCount();
     }
 }

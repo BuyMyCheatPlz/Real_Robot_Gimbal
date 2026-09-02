@@ -353,4 +353,14 @@ void CAN2_RX0_IRQHandler(void)
 
 /* USER CODE BEGIN 1 */
 
+void CAN1_SCE_IRQHandler(void)
+{
+  HAL_CAN_IRQHandler(&hcan1);
+}
+
+void CAN2_SCE_IRQHandler(void)
+{
+  HAL_CAN_IRQHandler(&hcan2);
+}
+
 /* USER CODE END 1 */

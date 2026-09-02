@@ -1,101 +1,132 @@
 #include "dm4310.h"
 #include <string.h>
 
-#define DM4310_POSITION_MIN (-12.5f)
-#define DM4310_POSITION_MAX (12.5f)
-#define DM4310_VELOCITY_MIN (-30.0f)
-#define DM4310_VELOCITY_MAX (30.0f)
-#define DM4310_TORQUE_MIN   (-10.0f)
-#define DM4310_TORQUE_MAX   (10.0f)
+#define TWO_PI_F 6.2831853071795864769f
 
-static float uint_to_float(uint16_t value, float min, float max, uint8_t bits)
+static uint16_t big_endian_u16(const uint8_t data[2])
 {
-    const uint32_t full_scale = (1UL << bits) - 1UL;
-    return ((float)value * (max - min) / (float)full_scale) + min;
+    return (uint16_t)(((uint16_t)data[0] << 8) | data[1]);
 }
 
-static HAL_StatusTypeDef send_frame(DM4310_t *motor, const uint8_t *data,
-                                    uint8_t length)
+static int16_t clamp_current(int16_t current)
 {
-    CAN_TxHeaderTypeDef header;
-    uint32_t mailbox;
-    if ((motor == 0) || (motor->hcan == 0) || (data == 0)) return HAL_ERROR;
-    header.StdId = DM4310_SPEED_MODE_BASE_ID + motor->motor_id;
-    header.ExtId = 0U;
-    header.IDE = CAN_ID_STD;
-    header.RTR = CAN_RTR_DATA;
-    header.DLC = length;
-    header.TransmitGlobalTime = DISABLE;
-    return HAL_CAN_AddTxMessage(motor->hcan, &header, (uint8_t *)data, &mailbox);
+    if (current > (int16_t)DM4310_CURRENT_COMMAND_LIMIT)
+        return (int16_t)DM4310_CURRENT_COMMAND_LIMIT;
+    if (current < (int16_t)-DM4310_CURRENT_COMMAND_LIMIT)
+        return (int16_t)-DM4310_CURRENT_COMMAND_LIMIT;
+    return current;
 }
 
-static HAL_StatusTypeDef send_special(DM4310_t *motor, uint8_t command)
-{
-    uint8_t data[8] = {0xFFU, 0xFFU, 0xFFU, 0xFFU,
-                       0xFFU, 0xFFU, 0xFFU, command};
-    return send_frame(motor, data, 8U);
-}
-
-void DM4310_Init(DM4310_t *motor, CAN_HandleTypeDef *hcan,
-                 uint16_t motor_id, uint16_t master_id)
+void DM4310_Init(DM4310_t *motor, uint8_t id, float kp, float ki)
 {
     if (motor == 0) return;
     memset(motor, 0, sizeof(*motor));
-    motor->hcan = hcan;
-    motor->motor_id = motor_id;
-    motor->master_id = master_id;
+    if ((id >= DM4310_MOTOR_ID_MIN) && (id <= DM4310_MOTOR_ID_MAX))
+        motor->id = id;
+    motor->speed_filter_alpha = 1.0f;
+    MotorSpeedPid_Init(&motor->speed_pid, kp, ki,
+                       DM4310_CURRENT_COMMAND_LIMIT,
+                       DM4310_CURRENT_COMMAND_LIMIT);
 }
 
-HAL_StatusTypeDef DM4310_Enable(DM4310_t *motor)
+void DM4310_SetSpeed(DM4310_t *motor, float speed_rpm)
 {
-    HAL_StatusTypeDef status = send_special(motor, 0xFCU);
-    if ((motor != 0) && (status == HAL_OK)) motor->enabled = 1U;
-    return status;
+    if (motor != 0) motor->target_speed_rpm = speed_rpm;
 }
 
-HAL_StatusTypeDef DM4310_Disable(DM4310_t *motor)
+void DM4310_SetCurrentFeedforward(DM4310_t *motor, int16_t current)
 {
-    if (motor != 0) motor->target_velocity_rad_s = 0.0f;
-    if (motor != 0) motor->enabled = 0U;
-    return send_special(motor, 0xFDU);
+    if (motor != 0) motor->current_feedforward = current;
 }
 
-HAL_StatusTypeDef DM4310_ClearError(DM4310_t *motor)
+void DM4310_SetSpeedFilterAlpha(DM4310_t *motor, float alpha)
 {
-    return send_special(motor, 0xFBU);
-}
-
-HAL_StatusTypeDef DM4310_SetVelocity(DM4310_t *motor, float velocity_rad_s)
-{
-    uint8_t data[4];
-    if (motor == 0) return HAL_ERROR;
-    if (velocity_rad_s > DM4310_VELOCITY_MAX) velocity_rad_s = DM4310_VELOCITY_MAX;
-    if (velocity_rad_s < DM4310_VELOCITY_MIN) velocity_rad_s = DM4310_VELOCITY_MIN;
-    motor->target_velocity_rad_s = velocity_rad_s;
-    memcpy(data, &velocity_rad_s, sizeof(data));
-    return send_frame(motor, data, 4U);
+    if (motor == 0) return;
+    if (alpha > 1.0f) alpha = 1.0f;
+    if (alpha < 0.0f) alpha = 0.0f;
+    motor->speed_filter_alpha = alpha;
 }
 
 void DM4310_Decode(DM4310_t *motor, const uint8_t data[8], uint32_t now_ms)
 {
-    uint16_t position;
-    uint16_t velocity;
-    uint16_t torque;
-    if ((motor == 0) || (data == 0)) return;
-    if ((data[0] & 0x0FU) != (motor->motor_id & 0x0FU)) return;
+    int16_t speed_scaled;
+    if ((motor == 0) || (data == 0) ||
+        (motor->id < DM4310_MOTOR_ID_MIN) ||
+        (motor->id > DM4310_MOTOR_ID_MAX))
+        return;
 
-    motor->state = data[0] >> 4;
-    position = (uint16_t)(((uint16_t)data[1] << 8) | data[2]);
-    velocity = (uint16_t)(((uint16_t)data[3] << 4) | (data[4] >> 4));
-    torque = (uint16_t)((((uint16_t)data[4] & 0x0FU) << 8) | data[5]);
-    motor->position_rad = uint_to_float(position, DM4310_POSITION_MIN,
-                                        DM4310_POSITION_MAX, 16U);
-    motor->velocity_rad_s = uint_to_float(velocity, DM4310_VELOCITY_MIN,
-                                          DM4310_VELOCITY_MAX, 12U);
-    motor->torque_nm = uint_to_float(torque, DM4310_TORQUE_MIN,
-                                     DM4310_TORQUE_MAX, 12U);
-    motor->mos_temperature = data[6];
-    motor->rotor_temperature = data[7];
+    motor->encoder = big_endian_u16(&data[0]) &
+                     (uint16_t)(DM4310_ENCODER_COUNTS - 1U);
+    motor->single_turn_position_rad = (float)motor->encoder * TWO_PI_F /
+                                      (float)DM4310_ENCODER_COUNTS;
+    speed_scaled = (int16_t)big_endian_u16(&data[2]);
+    motor->speed_rpm = (float)speed_scaled / DM4310_SPEED_FEEDBACK_SCALE;
+    motor->torque_current_ma = (int16_t)big_endian_u16(&data[4]);
+    motor->winding_temperature = data[6];
+    motor->pcb_temperature = data[7];
     motor->last_update_ms = now_ms;
     motor->online = 1U;
+}
+
+int16_t DM4310_Update(DM4310_t *motor, float dt_s)
+{
+    int32_t output;
+    int32_t output_limit;
+    if ((motor == 0) || (dt_s <= 0.0f)) return 0;
+    if ((motor->online == 0U) ||
+        (motor->id < DM4310_MOTOR_ID_MIN) ||
+        (motor->id > DM4310_MOTOR_ID_MAX))
+    {
+        MotorSpeedPid_Reset(&motor->speed_pid);
+        motor->speed_filter_initialized = 0U;
+        return 0;
+    }
+    if (motor->speed_filter_initialized == 0U)
+    {
+        motor->filtered_speed_rpm = motor->speed_rpm;
+        motor->speed_filter_initialized = 1U;
+    }
+    else
+    {
+        motor->filtered_speed_rpm += motor->speed_filter_alpha *
+            (motor->speed_rpm - motor->filtered_speed_rpm);
+    }
+    output = (int32_t)MotorSpeedPid_Calculate(&motor->speed_pid,
+                                               motor->target_speed_rpm,
+                                               motor->filtered_speed_rpm,
+                                               dt_s) +
+             (int32_t)motor->current_feedforward;
+    output_limit = (int32_t)motor->speed_pid.output_limit;
+    if (output_limit > (int32_t)DM4310_CURRENT_COMMAND_LIMIT)
+        output_limit = (int32_t)DM4310_CURRENT_COMMAND_LIMIT;
+    if (output_limit < 0) output_limit = 0;
+    if (output > output_limit) output = output_limit;
+    if (output < -output_limit) output = -output_limit;
+    return (int16_t)output;
+}
+
+uint8_t DM4310_PackCurrentCommand(const DM4310_t *motor, int16_t current,
+                                  uint16_t *std_id, uint8_t data[8])
+{
+    uint8_t slot;
+    uint16_t encoded;
+    if ((motor == 0) || (std_id == 0) || (data == 0) ||
+        (motor->id < DM4310_MOTOR_ID_MIN) ||
+        (motor->id > DM4310_MOTOR_ID_MAX))
+        return 0U;
+
+    if (motor->id <= 4U)
+    {
+        *std_id = DM4310_CURRENT_CONTROL_ID_1_TO_4;
+        slot = (uint8_t)(motor->id - 1U);
+    }
+    else
+    {
+        *std_id = DM4310_CURRENT_CONTROL_ID_5_TO_8;
+        slot = (uint8_t)(motor->id - 5U);
+    }
+    encoded = (uint16_t)clamp_current(current);
+    data[slot * 2U] = (uint8_t)(encoded >> 8);
+    data[slot * 2U + 1U] = (uint8_t)encoded;
+    return 1U;
 }

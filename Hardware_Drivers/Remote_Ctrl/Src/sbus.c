@@ -8,6 +8,8 @@
 
 static UART_HandleTypeDef *sbus_uart;
 static uint8_t sbus_dma_buffer[SBUS_DMA_BUFFER_LENGTH];
+static uint8_t sbus_frame_buffer[SBUS_FRAME_LENGTH];
+static uint8_t sbus_frame_length;
 static volatile SBusData_t sbus_data;
 
 static uint8_t frame_end_valid(uint8_t value)
@@ -15,10 +17,10 @@ static uint8_t frame_end_valid(uint8_t value)
     return (uint8_t)((value == 0x00U) || ((value & 0x0FU) == 0x04U));
 }
 
-static void decode_frame(const uint8_t frame[SBUS_FRAME_LENGTH])
+static uint8_t decode_frame(const uint8_t frame[SBUS_FRAME_LENGTH])
 {
     SBusData_t decoded;
-    if ((frame[0] != 0x0FU) || (frame_end_valid(frame[24]) == 0U)) return;
+    if ((frame[0] != 0x0FU) || (frame_end_valid(frame[24]) == 0U)) return 0U;
 
     memset(&decoded, 0, sizeof(decoded));
     decoded.channel[0]  = (uint16_t)((frame[1]       | frame[2]  << 8) & 0x07FFU);
@@ -44,6 +46,39 @@ static void decode_frame(const uint8_t frame[SBUS_FRAME_LENGTH])
     decoded.online = 1U;
     decoded.last_update_ms = HAL_GetTick();
     sbus_data = decoded;
+    return 1U;
+}
+
+static void consume_byte(uint8_t value)
+{
+    uint8_t next_header;
+    uint8_t remaining;
+    if (sbus_frame_length == 0U)
+    {
+        if (value != 0x0FU) return;
+        sbus_frame_buffer[0] = value;
+        sbus_frame_length = 1U;
+        return;
+    }
+
+    sbus_frame_buffer[sbus_frame_length++] = value;
+    if (sbus_frame_length < SBUS_FRAME_LENGTH) return;
+    if (decode_frame(sbus_frame_buffer) != 0U)
+    {
+        sbus_frame_length = 0U;
+        return;
+    }
+
+    for (next_header = 1U; next_header < SBUS_FRAME_LENGTH; ++next_header)
+        if (sbus_frame_buffer[next_header] == 0x0FU) break;
+    if (next_header >= SBUS_FRAME_LENGTH)
+    {
+        sbus_frame_length = 0U;
+        return;
+    }
+    remaining = (uint8_t)(SBUS_FRAME_LENGTH - next_header);
+    memmove(sbus_frame_buffer, &sbus_frame_buffer[next_header], remaining);
+    sbus_frame_length = remaining;
 }
 
 static HAL_StatusTypeDef start_receive(void)
@@ -62,6 +97,7 @@ HAL_StatusTypeDef SBus_Init(UART_HandleTypeDef *huart)
     if (huart == 0) return HAL_ERROR;
     sbus_uart = huart;
     memset((void *)&sbus_data, 0, sizeof(sbus_data));
+    sbus_frame_length = 0U;
     return start_receive();
 }
 
@@ -102,14 +138,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
         VOFA_UART_RxEventCallback(huart, size);
         return;
     }
-    for (index = 0U; (index + SBUS_FRAME_LENGTH) <= size; ++index)
-    {
-        if (sbus_dma_buffer[index] == 0x0FU)
-        {
-            decode_frame(&sbus_dma_buffer[index]);
-            index += SBUS_FRAME_LENGTH - 1U;
-        }
-    }
+    for (index = 0U; index < size; ++index)
+        consume_byte(sbus_dma_buffer[index]);
     (void)start_receive();
 }
 
@@ -120,6 +150,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         VOFA_UART_ErrorCallback(huart);
         return;
     }
+    sbus_frame_length = 0U;
     (void)HAL_UART_AbortReceive(huart);
     (void)start_receive();
 }

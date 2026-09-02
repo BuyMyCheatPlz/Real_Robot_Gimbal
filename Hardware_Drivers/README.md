@@ -3,7 +3,7 @@
 ## 已配置硬件
 
 - CAN1：M3508/C620，ID 2 和 ID 3；GM6020，ID 2。
-- CAN2：M2006/C610，ID 5；DM4310 标准 CAN 版，电机 ID 1，主机 ID `0x11`。
+- CAN2：M2006/C610，ID 5；DM4310 电流控制固件，电机 ID 1。
 - USART2：富斯 S.BUS，`100000 8E2`，DMA + 空闲中断接收。
 - SPI1：BMI088 标准 SPI 协议，使用 DMA。陀螺仪 CS 为 PA4，加速度计
   CS 为 PC4，陀螺仪 INT3 为 PC5，加速度计 INT1 为 PB0。
@@ -11,13 +11,27 @@
 `HardwareDrivers_Init()` 会启动两路 CAN、S.BUS 接收并完整初始化 BMI088。
 初始化阶段不会给 DJI 电机加载非零 PID，也不会让电机产生非零输出，避免上电误动作。
 
+## DM4310 电流协议
+
+- 电机 ID 范围为 1～8。
+- ID 1～4 共用控制标识符 `0x3FE`，ID 5～8 共用 `0x4FE`；每颗电机占两个
+  大端字节，控制量限制为 `-16384`～`16384`。
+- 反馈标识符为 `0x300 + 电机 ID`。D0～D1 是 0～8191 单圈位置；D2～D3
+  是有符号速度，物理转速为原始值除以 100 rpm；D4～D5 是有符号扭矩电流
+  mA；D6、D7 分别是绕组温度和 PCB 温度。
+- Yaw 位置由任务层展开为连续多圈角度；外层位置 PID 生成速度目标，MCU
+  软件速度 PID 再生成电流命令。
+
 ## 电机驱动
 
 任务层从 `Tasks/Inc/config.h` 加载实车 PID 参数并设置目标速度，随后由
 `PID_calc` 每 1 ms 调用 `CanMotorBus_Update(dt_s)` 统一发送 CAN 控制帧。
 
-紧急停止使用 `CanMotorBus_StopAll()`。每个反馈结构体均包含 `online` 和
-`last_update_ms`，用于判断电机是否在线。
+云台传感器故障使用 `CanMotorBus_StopGimbal()`：GM6020/DM4310 发送零命令，
+M3508/M2006 仍按独立发射任务运行。遥控失效、控制超期或 CAN 故障使用
+`CanMotorBus_StopAll()`。连续 3 次发送失败或 CAN bus-off 会锁存全零；中止旧
+邮箱、清除 HAL 错误后，连续 10 组零帧发送成功才解除锁存。状态可通过
+`CanMotorBus_GetStatus()`读取。
 
 ## S.BUS 电气要求
 
@@ -35,6 +49,8 @@ BMI088_Init(&bmi088, &hspi1,
             CS_Gyro_GPIO_Port, CS_Gyro_Pin);
 ```
 
-陀螺仪 INT3 以 1 kHz 触发加速度、角速度和温度的三级 DMA 读取。加速度计
-INT1 同时启用并记录中断次数，便于诊断。默认量程为加速度计 ±6 g、800 Hz，
-陀螺仪 ±2000 °/s。输出单位分别为 m/s²、rad/s 和摄氏度。
+初始化会暂时屏蔽 EXTI，完成同步首读、清除 pending 后才开放 1 kHz DRDY。
+INT1 配置为推挽、高有效 `0x0A`。三级 DMA 仅在 SPI 与 TX/RX DMA 均就绪时
+续传；等待超过 5 ms 会在任务态 abort 并恢复。加速度计 INT1 同时记录中断
+次数。默认量程为加速度计 ±6 g、800 Hz，陀螺仪 ±2000 °/s；输出单位分别为
+m/s²、rad/s 和摄氏度。

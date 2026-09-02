@@ -7,9 +7,11 @@
 #define DATA_PROCESS_PERIOD_MS            1U
 #define SBUS_TIMEOUT_MS                   100U
 #define REMOTE_COMMAND_TIMEOUT_MS         150U
+#define IMU_DATA_TIMEOUT_MS                20U
+#define CONTROL_MAX_DT_S                   0.010f
 #define LAUNCH_REMOTE_TIMEOUT_MS          100U
 #define LAUNCH_TASK_WAIT_MS               2U
-#define VOFA_PERIOD_MS                    20U
+#define VOFA_PERIOD_MS                    10U
 #define ONLINE_PID_VALUE_MAX              100000.0f
 
 /* ---------------- 遥控器通道与线性映射 ---------------- */
@@ -62,19 +64,39 @@
 #define PITCH_SPEED_KD                    0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT        30000.0f
 #define PITCH_SPEED_OUTPUT_LIMIT          30000.0f
+#define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 80.0f
+#define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
 #define PITCH_GRAVITY_FF_MAX_VOLTAGE      1200.0f
 #define PITCH_GRAVITY_ZERO_RAD            0.0f
 #define PITCH_GRAVITY_SIGN                1.0f
 #define PITCH_MOTOR_SIGN                  1.0f
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
-/* ---------------- Yaw：DM4310 外位置环 + 电调内部速度环 ---------------- */
+/* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ---------------- */
 #define YAW_ANGLE_KP_RAD_S_PER_RAD        5.0f
 #define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.0f
 #define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.10f
 #define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    1.0f
 #define YAW_MAX_SPEED_RAD_S               4.0f
-#define YAW_TARGET_SLEW_RAD_S             2.0f
+/* Yaw reference trajectory.  The profile is output-axis radians. */
+#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    2.0f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2  15.0f
+/* 0 disables velocity feedforward; 1 applies the planned speed directly. */
+#define YAW_VELOCITY_FF_GAIN              1.0f
+/* Directly tunable torque feedforward: CAN current-command counts per
+ * output-axis rad/s^2.  Keep zero until the PID loops are stable.  Positive
+ * means positive output-axis acceleration; YAW_MOTOR_SIGN is applied by the
+ * controller. */
+#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 0.0f
+#define YAW_ACCELERATION_FF_CURRENT_LIMIT 800.0f
+#define YAW_SPEED_KP_CURRENT_PER_RPM       80.0f
+#define YAW_SPEED_KI_CURRENT_PER_RPM_S      8.0f
+#define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
+#define YAW_SPEED_INTEGRAL_LIMIT_CURRENT 1500.0f
+/* ±16384 对应铭牌最大电流；首次上板保守限制为约 18%。 */
+#define YAW_CURRENT_OUTPUT_LIMIT          3000.0f
+#define YAW_SPEED_INTEGRAL_SEPARATION_RPM 30.0f
+#define YAW_ANGLE_INTEGRAL_SEPARATION_RAD (20.0f * TASK_DEG_TO_RAD)
 #define YAW_MOTOR_SIGN                    1.0f
 #define YAW_SOFT_LIMIT_DEG                180.0f
 
@@ -84,6 +106,7 @@
 #define LAUNCH_M3508_ID2_SPEED_KD         0.0f
 #define LAUNCH_M3508_ID2_INTEGRAL_LIMIT   16384.0f
 #define LAUNCH_M3508_ID2_OUTPUT_LIMIT     16384.0f
+#define LAUNCH_M3508_ID2_INTEGRAL_SEPARATION_RPM 1000.0f
 #define LAUNCH_M3508_ID2_SPEED_LPF_ALPHA  0.20f
 #define LAUNCH_M3508_ID2_DIRECTION        1.0f
 
@@ -93,6 +116,7 @@
 #define LAUNCH_M3508_ID3_SPEED_KD         0.0f
 #define LAUNCH_M3508_ID3_INTEGRAL_LIMIT   16384.0f
 #define LAUNCH_M3508_ID3_OUTPUT_LIMIT     16384.0f
+#define LAUNCH_M3508_ID3_INTEGRAL_SEPARATION_RPM 1000.0f
 #define LAUNCH_M3508_ID3_SPEED_LPF_ALPHA  0.20f
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
@@ -102,6 +126,7 @@
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   10000.0f
 #define LAUNCH_M2006_ID5_OUTPUT_LIMIT     10000.0f
+#define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 30.0f
 #define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.20f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
 

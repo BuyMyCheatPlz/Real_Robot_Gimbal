@@ -217,6 +217,7 @@ void Data_Process(void *argument)
     {
         process_vofa_commands();
         memset(&message, 0, sizeof(message));
+        (void)BMI088_ServiceDMA(&bmi088, HAL_GetTick());
         publish = update_attitude(&estimator, &message);
         SBus_CheckOffline(HAL_GetTick(), SBUS_TIMEOUT_MS);
         CanMotorBus_CheckOffline(HAL_GetTick());
@@ -232,7 +233,10 @@ void Data_Process(void *argument)
             current[1] = SBus_ChannelNormalized(REMOTE_CH_PITCH_NEG_INDEX);
             current[2] = SBus_ChannelNormalized(REMOTE_CH_YAW_POS_INDEX);
             current[3] = SBus_ChannelNormalized(REMOTE_CH_YAW_NEG_INDEX);
-            if (remote_ok != 0U) message.flags |= GIMBAL_MSG_REMOTE_OK;
+            if (remote_ok != 0U)
+                message.flags |= GIMBAL_MSG_REMOTE_OK;
+            else
+                message.flags |= GIMBAL_MSG_REMOTE_BAD;
 
             if ((previous_valid != 0U) && (remote_ok != 0U))
             {

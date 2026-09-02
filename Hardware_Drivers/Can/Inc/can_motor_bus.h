@@ -8,6 +8,17 @@
 #include "dm4310.h"
 
 #define CAN_MOTOR_OFFLINE_TIMEOUT_MS 100U
+#define CAN_MOTOR_TX_FAILURE_LATCH_COUNT 3U
+#define CAN_MOTOR_TX_RECOVERY_FRAME_COUNT 10U
+
+typedef struct
+{
+    uint32_t total_tx_failures;
+    uint32_t bus_error_count;
+    uint16_t consecutive_tx_failures;
+    uint16_t recovery_zero_frames;
+    uint8_t fault_latched;
+} CanMotorBusStatus_t;
 
 extern M3508_t can1_m3508_id2;
 extern M3508_t can1_m3508_id3;
@@ -18,7 +29,10 @@ extern DM4310_t can2_dm4310_id1;
 HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
                                    CAN_HandleTypeDef *can2);
 HAL_StatusTypeDef CanMotorBus_Update(float dt_s);
+HAL_StatusTypeDef CanMotorBus_StopGimbal(float dt_s);
 HAL_StatusTypeDef CanMotorBus_StopAll(void);
 void CanMotorBus_CheckOffline(uint32_t now_ms);
+uint8_t CanMotorBus_TxHealthy(void);
+void CanMotorBus_GetStatus(CanMotorBusStatus_t *status);
 
 #endif

@@ -8,7 +8,8 @@ enum
     GIMBAL_MSG_ATTITUDE    = (1U << 0),
     GIMBAL_MSG_PITCH_DELTA = (1U << 1),
     GIMBAL_MSG_YAW_DELTA   = (1U << 2),
-    GIMBAL_MSG_REMOTE_OK   = (1U << 3)
+    GIMBAL_MSG_REMOTE_OK   = (1U << 3),
+    GIMBAL_MSG_REMOTE_BAD  = (1U << 4)
 };
 
 /* Target_Angle 队列消息；角度增量只允许 PID_calc 消费一次。 */
@@ -62,7 +63,15 @@ typedef struct
     float pitch_speed_rpm;
     float yaw_speed_rad_s;
     float gravity_feedforward;
+    float yaw_trajectory_speed_rad_s;
+    float yaw_velocity_feedforward_rad_s;
+    float yaw_acceleration_feedforward_current;
+    uint32_t can_tx_failure_count;
+    uint32_t control_overrun_count;
     uint8_t active;
+    uint8_t feedback_healthy;
+    uint8_t imu_fresh;
+    uint8_t can_tx_fault;
 } GimbalControlState_t;
 
 extern volatile GimbalControlState_t gimbal_control_state;

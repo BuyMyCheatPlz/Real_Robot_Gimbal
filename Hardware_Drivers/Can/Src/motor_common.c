@@ -16,6 +16,7 @@ void MotorSpeedPid_Init(MotorSpeedPid_t *pid, float kp, float ki,
     pid->kd = 0.0f;
     pid->integral = 0.0f;
     pid->integral_limit = integral_limit;
+    pid->integral_separation_error = 0.0f;
     pid->output_limit = output_limit;
     pid->previous_measurement = 0.0f;
     pid->initialized = 0U;
@@ -39,12 +40,23 @@ void MotorSpeedPid_SetGains(MotorSpeedPid_t *pid, float kp, float ki,
     pid->kd = kd;
 }
 
+void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
+                                         float error_limit)
+{
+    if (pid == 0) return;
+    pid->integral_separation_error = (error_limit > 0.0f) ?
+        error_limit : 0.0f;
+}
+
 int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
                                 float measured_rpm, float dt_s)
 {
     float error;
     float output;
     float derivative = 0.0f;
+    float proportional_derivative;
+    float candidate_integral;
+    uint8_t integrate;
     if ((pid == 0) || (dt_s <= 0.0f)) return 0;
 
     error = target_rpm - measured_rpm;
@@ -53,9 +65,23 @@ int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
     else
         pid->initialized = 1U;
     pid->previous_measurement = measured_rpm;
-    pid->integral += error * pid->ki * dt_s;
-    pid->integral = clampf(pid->integral, pid->integral_limit);
-    output = error * pid->kp + pid->integral + derivative * pid->kd;
+    proportional_derivative = error * pid->kp + derivative * pid->kd;
+    integrate = (uint8_t)((pid->integral_separation_error <= 0.0f) ||
+                          (error <= pid->integral_separation_error &&
+                           error >= -pid->integral_separation_error));
+    if (integrate != 0U)
+    {
+        candidate_integral = clampf(pid->integral + error * pid->ki * dt_s,
+                                    pid->integral_limit);
+        output = proportional_derivative + candidate_integral;
+        /* Do not integrate further in the direction of an already saturated
+         * actuator; permit the opposite sign to unwind the accumulator. */
+        if (((output < pid->output_limit) && (output > -pid->output_limit)) ||
+            ((output >= pid->output_limit) && (error < 0.0f)) ||
+            ((output <= -pid->output_limit) && (error > 0.0f)))
+            pid->integral = candidate_integral;
+    }
+    output = proportional_derivative + pid->integral;
     output = clampf(output, pid->output_limit);
     return (int16_t)output;
 }
