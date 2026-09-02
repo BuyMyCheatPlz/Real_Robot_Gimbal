@@ -5,28 +5,28 @@
 #define CONTROL_PERIOD_S                  0.001f
 #define CONTROL_PERIOD_TICKS              1U
 #define DATA_PROCESS_PERIOD_MS            1U
-#define SBUS_TIMEOUT_MS                   100U
+#define DBUS_TIMEOUT_MS                   100U
 #define REMOTE_COMMAND_TIMEOUT_MS         150U
 #define IMU_DATA_TIMEOUT_MS                20U
 #define CONTROL_MAX_DT_S                   0.010f
 #define LAUNCH_REMOTE_TIMEOUT_MS          100U
 #define LAUNCH_TASK_WAIT_MS               2U
-#define VOFA_PERIOD_MS                    10U
+#define VOFA_PERIOD_MS                    20U
 #define ONLINE_PID_VALUE_MAX              100000.0f
 
 /* ---------------- 遥控器通道与线性映射 ---------------- */
-#define SBUS_CONTROL_MIN                  240U
-#define SBUS_CONTROL_MAX                  1807U
+#define DBUS_CENTER_CHANNEL               1024U
+#define DBUS_DEADZONE                     60U
 #define REMOTE_EDGE_THRESHOLD             0.55f
 #define GIMBAL_COMMAND_STEP_DEG            30.0f
 #define LAUNCH_M3508_TARGET_MAX_SPEED_RPM 6000.0f
 #define LAUNCH_M2006_ID5_MAX_SPEED_RPM    100.0f
-#define REMOTE_CH_FLYWHEEL_INDEX          3U  /* 遥控器 CH4 */
-#define REMOTE_CH_FEEDER_INDEX            4U  /* 遥控器 CH5 */
-#define REMOTE_CH_PITCH_POS_INDEX         5U  /* 遥控器 CH6 */
-#define REMOTE_CH_PITCH_NEG_INDEX         6U  /* 遥控器 CH7 */
-#define REMOTE_CH_YAW_POS_INDEX           7U  /* 遥控器 CH8 */
-#define REMOTE_CH_YAW_NEG_INDEX           8U  /* 遥控器 CH9 */
+#define REMOTE_CH_FLYWHEEL_INDEX          4U  /* D-BUS S1 */
+#define REMOTE_CH_FEEDER_INDEX            5U  /* D-BUS S2 */
+#define REMOTE_CH_PITCH_INDEX             3U  /* 遥控器 CH4 */
+#define REMOTE_CH_YAW_INDEX               0U  /* 遥控器 CH1 */
+#define REMOTE_CH_S1_INDEX                4U  /* D-BUS S1 */
+#define REMOTE_CH_S2_INDEX                5U  /* D-BUS S2 */
 
 /* ---------------- BMI088 安装方向与姿态滤波 ----------------
  * 轴编号对应数组下标：X=0、Y=1、Z=2。调试重力前馈前，必须根据 BMI088

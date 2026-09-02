@@ -4,11 +4,11 @@
 
 - CAN1：M3508/C620，ID 2 和 ID 3；GM6020，ID 2。
 - CAN2：M2006/C610，ID 5；DM4310 电流控制固件，电机 ID 1。
-- USART2：富斯 S.BUS，`100000 8E2`，DMA + 空闲中断接收。
+- USART2：大疆 D-BUS，`100000 8E2`，DMA + 空闲中断接收。
 - SPI1：BMI088 标准 SPI 协议，使用 DMA。陀螺仪 CS 为 PA4，加速度计
   CS 为 PC4，陀螺仪 INT3 为 PC5，加速度计 INT1 为 PB0。
 
-`HardwareDrivers_Init()` 会启动两路 CAN、S.BUS 接收并完整初始化 BMI088。
+`HardwareDrivers_Init()` 会启动两路 CAN、D-BUS 接收并完整初始化 BMI088。
 初始化阶段不会给 DJI 电机加载非零 PID，也不会让电机产生非零输出，避免上电误动作。
 
 ## DM4310 电流协议
@@ -33,11 +33,11 @@ M3508/M2006 仍按独立发射任务运行。遥控失效、控制超期或 CAN 
 邮箱、清除 HAL 错误后，连续 10 组零帧发送成功才解除锁存。状态可通过
 `CanMotorBus_GetStatus()`读取。
 
-## S.BUS 电气要求
+## D-BUS 电气要求
 
-STM32F405 的串口没有硬件 RX 极性反转功能，而标准 S.BUS 波形为反相电平。
-因此 USART2 RX 必须连接接收机的非反相 S.BUS 输出，或者在 PA3 前增加外部
-反相器。将反相 S.BUS 波形直接接入 PA3 时无法解析出有效遥控帧。
+STM32F405 的串口没有硬件 RX 极性反转功能，而标准 D-BUS 波形为反相电平。
+因此 USART2 RX 必须连接接收机的非反相 D-BUS 输出，或者在 PA3 前增加外部
+反相器。将反相 D-BUS 波形直接接入 PA3 时无法解析出有效遥控帧。
 
 ## BMI088
 

@@ -3,11 +3,10 @@
 #include "cmsis_os2.h"
 #include "usart.h"
 #include "config.h"
-#include <math.h>
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-#define VOFA_CHANNEL_COUNT 4U
+#define VOFA_CHANNEL_COUNT 3U
 #define VOFA_TX_LENGTH     (VOFA_CHANNEL_COUNT * sizeof(float) + 4U)
 #define VOFA_COMMAND_QUEUE_DEPTH 4U
 #define RAD_TO_DEG         57.295779513082320876f
@@ -33,13 +32,6 @@ static HAL_StatusTypeDef start_rx_dma(void)
     if ((status == HAL_OK) && (vofa_uart->hdmarx != 0))
         __HAL_DMA_DISABLE_IT(vofa_uart->hdmarx, DMA_IT_HT);
     return status;
-}
-
-static float normalize_degrees(float radians)
-{
-    float degrees = fmodf(radians * RAD_TO_DEG, 360.0f);
-    if (degrees < 0.0f) degrees += 360.0f;
-    return degrees;
 }
 
 HAL_StatusTypeDef VOFA_Init(UART_HandleTypeDef *huart)
@@ -69,22 +61,20 @@ uint8_t VOFA_GetCommand(char command[VOFA_COMMAND_MAX_LENGTH])
     return 1U;
 }
 
-HAL_StatusTypeDef VOFA_SendAngles(float pitch_target_deg,
-                                  float pitch_actual_deg,
-                                  float yaw_target_deg,
-                                  float yaw_actual_deg)
+HAL_StatusTypeDef VOFA_SendImuAngles(float roll_deg,
+                                     float pitch_deg,
+                                     float yaw_deg)
 {
     float channels[VOFA_CHANNEL_COUNT];
     if ((vofa_uart == 0) || (tx_busy != 0U)) return HAL_BUSY;
-    channels[0] = pitch_target_deg;
-    channels[1] = pitch_actual_deg;
-    channels[2] = yaw_target_deg;
-    channels[3] = yaw_actual_deg;
+    channels[0] = roll_deg;
+    channels[1] = pitch_deg;
+    channels[2] = yaw_deg;
     memcpy(tx_buffer, channels, sizeof(channels));
-    tx_buffer[16] = 0x00U;
-    tx_buffer[17] = 0x00U;
-    tx_buffer[18] = 0x80U;
-    tx_buffer[19] = 0x7FU;
+    tx_buffer[sizeof(channels)] = 0x00U;
+    tx_buffer[sizeof(channels) + 1U] = 0x00U;
+    tx_buffer[sizeof(channels) + 2U] = 0x80U;
+    tx_buffer[sizeof(channels) + 3U] = 0x7FU;
     tx_busy = 1U;
     if (HAL_UART_Transmit_DMA(vofa_uart, tx_buffer, VOFA_TX_LENGTH) != HAL_OK)
     {
@@ -161,11 +151,10 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        (void)VOFA_SendAngles(
-            normalize_degrees(snapshot.pitch_target_rad),
-            normalize_degrees(snapshot.pitch_encoder_rad),
-            normalize_degrees(snapshot.yaw_target_rad),
-            normalize_degrees(snapshot.yaw_encoder_rad));
+        (void)VOFA_SendImuAngles(
+            snapshot.imu_roll_rad * RAD_TO_DEG,
+            snapshot.imu_pitch_rad * RAD_TO_DEG,
+            snapshot.imu_yaw_rad * RAD_TO_DEG);
         wake_tick += VOFA_PERIOD_MS;
         if (osDelayUntil(wake_tick) != osOK)
             wake_tick = osKernelGetTickCount();

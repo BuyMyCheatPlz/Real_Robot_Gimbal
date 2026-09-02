@@ -38,5 +38,4 @@ real_robot_gimbal\vofa.o: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_
 real_robot_gimbal\vofa.o: ../Core/Inc/usart.h
 real_robot_gimbal\vofa.o: ../Core/Inc/main.h
 real_robot_gimbal\vofa.o: ../Tasks/Inc/config.h
-real_robot_gimbal\vofa.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 real_robot_gimbal\vofa.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

@@ -42,7 +42,7 @@ real_robot_gimbal\data_process.o: ../Hardware_Drivers/Can/Inc/motor_common.h
 real_robot_gimbal\data_process.o: ../Hardware_Drivers/m2006+c610/Inc/m2006.h
 real_robot_gimbal\data_process.o: ../Hardware_Drivers/Gm6020/Inc/gm6020.h
 real_robot_gimbal\data_process.o: ../Hardware_Drivers/Dm4310/Inc/dm4310.h
-real_robot_gimbal\data_process.o: ../Hardware_Drivers/Remote_Ctrl/Inc/sbus.h
+real_robot_gimbal\data_process.o: ../Hardware_Drivers/Remote_Ctrl/Inc/dbus.h
 real_robot_gimbal\data_process.o: ../Tasks/Inc/vofa.h
 real_robot_gimbal\data_process.o: ../Tasks/Inc/config.h
 real_robot_gimbal\data_process.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\math.h

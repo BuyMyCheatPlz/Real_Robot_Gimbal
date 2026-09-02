@@ -66,6 +66,9 @@ typedef struct
     float yaw_trajectory_speed_rad_s;
     float yaw_velocity_feedforward_rad_s;
     float yaw_acceleration_feedforward_current;
+    float imu_roll_rad;
+    float imu_pitch_rad;
+    float imu_yaw_rad;
     uint32_t can_tx_failure_count;
     uint32_t control_overrun_count;
     uint8_t active;

@@ -257,6 +257,9 @@ void PID_calc(void *argument)
                 imu_pitch = message.pitch_rad;
                 imu_initialized = 1U;
                 last_imu_ms = now_ms;
+                gimbal_control_state.imu_roll_rad = message.roll_rad;
+                gimbal_control_state.imu_pitch_rad = message.pitch_rad;
+                gimbal_control_state.imu_yaw_rad = message.yaw_rad;
             }
             if ((message.flags & GIMBAL_MSG_REMOTE_OK) != 0U)
             {

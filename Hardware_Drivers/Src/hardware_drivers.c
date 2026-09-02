@@ -2,7 +2,7 @@
 #include "can.h"
 #include "usart.h"
 #include "can_motor_bus.h"
-#include "sbus.h"
+#include "dbus.h"
 #include "spi.h"
 #include "main.h"
 
@@ -14,7 +14,7 @@ HAL_StatusTypeDef HardwareDrivers_Init(void)
 {
     HAL_StatusTypeDef bmi_status;
     if (CanMotorBus_Init(&hcan1, &hcan2) != HAL_OK) return HAL_ERROR;
-    if (SBus_Init(&huart2) != HAL_OK) return HAL_ERROR;
+    if (DBus_Init(&huart2) != HAL_OK) return HAL_ERROR;
 
     /* CubeMX 已配置 EXTI；BMI 完整首读前禁止 DRDY 回调进入 SPI DMA。 */
     HAL_NVIC_DisableIRQ(EXTI0_IRQn);

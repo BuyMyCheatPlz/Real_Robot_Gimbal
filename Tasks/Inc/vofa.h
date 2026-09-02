@@ -8,10 +8,9 @@
 
 HAL_StatusTypeDef VOFA_Init(UART_HandleTypeDef *huart);
 uint8_t VOFA_GetCommand(char command[VOFA_COMMAND_MAX_LENGTH]);
-HAL_StatusTypeDef VOFA_SendAngles(float pitch_target_deg,
-                                  float pitch_actual_deg,
-                                  float yaw_target_deg,
-                                  float yaw_actual_deg);
+HAL_StatusTypeDef VOFA_SendImuAngles(float roll_deg,
+                                     float pitch_deg,
+                                     float yaw_deg);
 void VOFA_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size);
 void VOFA_UART_ErrorCallback(UART_HandleTypeDef *huart);
 

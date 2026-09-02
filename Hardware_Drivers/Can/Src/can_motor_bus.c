@@ -71,14 +71,25 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
     pack_slot(can1_c620, 2U, m3508_id3);
     pack_slot(can1_gm, 1U, gm6020_id2);
     pack_slot(can2_c610, 0U, m2006_id5);
-    if (DM4310_PackCurrentCommand(&can2_dm4310_id1, dm4310_id1,
-                                  &dm_control_id, can2_dm) == 0U)
-        return HAL_ERROR;
+    if (can2_dm4310_id1.online != 0U)
+    {
+        if (DM4310_PackCurrentCommand(&can2_dm4310_id1, dm4310_id1,
+                                      &dm_control_id, can2_dm) == 0U)
+            return HAL_ERROR;
+    }
 
     if (send_std(bus_can1, 0x200U, can1_c620) != HAL_OK) status = HAL_ERROR;
     if (send_std(bus_can1, 0x1FFU, can1_gm) != HAL_OK) status = HAL_ERROR;
-    if (send_std(bus_can2, 0x1FFU, can2_c610) != HAL_OK) status = HAL_ERROR;
-    if (send_std(bus_can2, dm_control_id, can2_dm) != HAL_OK) status = HAL_ERROR;
+    if (can2_m2006_id5.feedback.online != 0U)
+    {
+        if (send_std(bus_can2, 0x1FFU, can2_c610) != HAL_OK)
+            status = HAL_ERROR;
+    }
+    if (can2_dm4310_id1.online != 0U)
+    {
+        if (send_std(bus_can2, dm_control_id, can2_dm) != HAL_OK)
+            status = HAL_ERROR;
+    }
     return status;
 }
 

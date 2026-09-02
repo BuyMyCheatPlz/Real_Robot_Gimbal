@@ -7,7 +7,7 @@
 "real_robot_gimbal\m2006.o"
 "real_robot_gimbal\gm6020.o"
 "real_robot_gimbal\dm4310.o"
-"real_robot_gimbal\sbus.o"
+"real_robot_gimbal\dbus.o"
 "real_robot_gimbal\bmi088.o"
 "real_robot_gimbal\data_process.o"
 "real_robot_gimbal\pid_calc.o"

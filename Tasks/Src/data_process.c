@@ -2,7 +2,7 @@
 #include "cmsis_os2.h"
 #include "hardware_drivers.h"
 #include "can_motor_bus.h"
-#include "sbus.h"
+#include "dbus.h"
 #include "vofa.h"
 #include "config.h"
 #include <math.h>
@@ -27,9 +27,25 @@ typedef struct
     uint8_t initialized;
 } AttitudeEstimator_t;
 
-static uint8_t channel_changed(float current, float previous)
+static int8_t dbus_channel_sign(uint16_t channel)
 {
-    return (uint8_t)(fabsf(current - previous) >= REMOTE_EDGE_THRESHOLD);
+    int32_t value = (int32_t)channel;
+    int32_t center = (int32_t)DBUS_CENTER_CHANNEL;
+    int32_t deadzone = (int32_t)DBUS_DEADZONE;
+
+    if ((value >= (center - deadzone)) && (value <= (center + deadzone)))
+        return 0;
+    if (value > (center + deadzone)) return 1;
+    return -1;
+}
+
+static float map_dbus_switch_speed(uint16_t switch_value,
+                                   float high_speed_rpm,
+                                   float low_speed_rpm)
+{
+    if (switch_value == 3U) return high_speed_rpm;
+    if (switch_value == 2U) return low_speed_rpm;
+    return 0.0f;
 }
 
 static void queue_latest(const TargetAngleMessage_t *message)
@@ -92,15 +108,7 @@ static void process_vofa_commands(void)
     }
 }
 
-static float map_sbus_speed(uint16_t channel, float maximum_rpm)
-{
-    if (channel <= SBUS_CONTROL_MIN) return 0.0f;
-    if (channel >= SBUS_CONTROL_MAX) return maximum_rpm;
-    return ((float)(channel - SBUS_CONTROL_MIN) /
-            (float)(SBUS_CONTROL_MAX - SBUS_CONTROL_MIN)) * maximum_rpm;
-}
-
-static void publish_launch_parameters(const SBusData_t *remote,
+static void publish_launch_parameters(const DBusData_t *remote,
                                       uint8_t remote_ok)
 {
     LaunchParameterUpdate_t update;
@@ -110,12 +118,14 @@ static void publish_launch_parameters(const SBusData_t *remote,
     if (remote_ok != 0U)
     {
         update.flywheel_speed_rpm =
-            map_sbus_speed(remote->channel[REMOTE_CH_FLYWHEEL_INDEX],
-                           LAUNCH_M3508_TARGET_MAX_SPEED_RPM);
+            map_dbus_switch_speed(remote->channel[REMOTE_CH_S1_INDEX],
+                                  LAUNCH_M3508_TARGET_MAX_SPEED_RPM,
+                                  100.0f);
         update.feeder_speed_rpm =
-            map_sbus_speed(remote->channel[REMOTE_CH_FEEDER_INDEX],
-                           LAUNCH_M2006_ID5_MAX_SPEED_RPM);
-        if ((can1_m3508_id2.feedback.online != 0U) &&
+            map_dbus_switch_speed(remote->channel[REMOTE_CH_S2_INDEX],
+                                  LAUNCH_M2006_ID5_MAX_SPEED_RPM,
+                                  50.0f);
+        if ((can1_m3508_id2.feedback.online != 0U) ||
             (can1_m3508_id3.feedback.online != 0U))
         {
             update.flags |= LAUNCH_FLYWHEEL_READY;
@@ -204,9 +214,10 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
 void Data_Process(void *argument)
 {
     AttitudeEstimator_t estimator;
-    SBusData_t remote;
+    DBusData_t remote;
     TargetAngleMessage_t message;
-    float previous[4] = {0.0f};
+    int8_t previous_pitch_sign = 0;
+    int8_t previous_yaw_sign = 0;
     uint32_t previous_remote_update = 0U;
     uint8_t previous_valid = 0U;
     uint8_t publish;
@@ -219,20 +230,19 @@ void Data_Process(void *argument)
         memset(&message, 0, sizeof(message));
         (void)BMI088_ServiceDMA(&bmi088, HAL_GetTick());
         publish = update_attitude(&estimator, &message);
-        SBus_CheckOffline(HAL_GetTick(), SBUS_TIMEOUT_MS);
+        DBus_CheckOffline(HAL_GetTick(), DBUS_TIMEOUT_MS);
         CanMotorBus_CheckOffline(HAL_GetTick());
 
-        if ((SBus_GetData(&remote) != 0U) &&
+        if ((DBus_GetData(&remote) != 0U) &&
             (remote.last_update_ms != previous_remote_update))
         {
-            float current[4];
+            int8_t current_pitch_sign;
+            int8_t current_yaw_sign;
             uint8_t remote_ok = (uint8_t)((remote.failsafe == 0U) &&
                                           (remote.frame_lost == 0U));
             publish_launch_parameters(&remote, remote_ok);
-            current[0] = SBus_ChannelNormalized(REMOTE_CH_PITCH_POS_INDEX);
-            current[1] = SBus_ChannelNormalized(REMOTE_CH_PITCH_NEG_INDEX);
-            current[2] = SBus_ChannelNormalized(REMOTE_CH_YAW_POS_INDEX);
-            current[3] = SBus_ChannelNormalized(REMOTE_CH_YAW_NEG_INDEX);
+            current_pitch_sign = dbus_channel_sign(remote.channel[REMOTE_CH_PITCH_INDEX]);
+            current_yaw_sign = dbus_channel_sign(remote.channel[REMOTE_CH_YAW_INDEX]);
             if (remote_ok != 0U)
                 message.flags |= GIMBAL_MSG_REMOTE_OK;
             else
@@ -240,28 +250,27 @@ void Data_Process(void *argument)
 
             if ((previous_valid != 0U) && (remote_ok != 0U))
             {
-                if (channel_changed(current[0], previous[0]) != 0U)
+                if (current_pitch_sign != previous_pitch_sign)
                 {
-                    message.pitch_delta_rad += COMMAND_STEP_RAD;
-                    message.flags |= GIMBAL_MSG_PITCH_DELTA;
+                    if (current_pitch_sign > 0)
+                        message.pitch_delta_rad += COMMAND_STEP_RAD;
+                    else if (current_pitch_sign < 0)
+                        message.pitch_delta_rad -= COMMAND_STEP_RAD;
+                    if (current_pitch_sign != 0)
+                        message.flags |= GIMBAL_MSG_PITCH_DELTA;
                 }
-                if (channel_changed(current[1], previous[1]) != 0U)
+                if (current_yaw_sign != previous_yaw_sign)
                 {
-                    message.pitch_delta_rad -= COMMAND_STEP_RAD;
-                    message.flags |= GIMBAL_MSG_PITCH_DELTA;
-                }
-                if (channel_changed(current[2], previous[2]) != 0U)
-                {
-                    message.yaw_delta_rad += COMMAND_STEP_RAD;
-                    message.flags |= GIMBAL_MSG_YAW_DELTA;
-                }
-                if (channel_changed(current[3], previous[3]) != 0U)
-                {
-                    message.yaw_delta_rad -= COMMAND_STEP_RAD;
-                    message.flags |= GIMBAL_MSG_YAW_DELTA;
+                    if (current_yaw_sign > 0)
+                        message.yaw_delta_rad += COMMAND_STEP_RAD;
+                    else if (current_yaw_sign < 0)
+                        message.yaw_delta_rad -= COMMAND_STEP_RAD;
+                    if (current_yaw_sign != 0)
+                        message.flags |= GIMBAL_MSG_YAW_DELTA;
                 }
             }
-            memcpy(previous, current, sizeof(previous));
+            previous_pitch_sign = current_pitch_sign;
+            previous_yaw_sign = current_yaw_sign;
             previous_valid = remote_ok;
             previous_remote_update = remote.last_update_ms;
             message.timestamp_ms = HAL_GetTick();

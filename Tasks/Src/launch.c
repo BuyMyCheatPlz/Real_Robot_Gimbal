@@ -65,27 +65,36 @@ void Launch_Task(void *argument)
                                      0, 0U) == osOK) {}
             have_update = 1U;
             flywheel_authorized = (uint8_t)(
-                ((update.flags & LAUNCH_FLYWHEEL_READY) != 0U) &&
-                (osSemaphoreAcquire(wake_launchHandle, 0U) == osOK));
+                (update.flags & LAUNCH_FLYWHEEL_READY) != 0U);
             feeder_authorized = (uint8_t)(
-                ((update.flags & LAUNCH_FEEDER_READY) != 0U) &&
-                (osSemaphoreAcquire(wake_launch_motorHandle, 0U) == osOK));
-            if (flywheel_authorized == 0U)
-                (void)osSemaphoreAcquire(wake_launchHandle, 0U);
-            if (feeder_authorized == 0U)
-                (void)osSemaphoreAcquire(wake_launch_motorHandle, 0U);
+                (update.flags & LAUNCH_FEEDER_READY) != 0U);
+            (void)osSemaphoreAcquire(wake_launchHandle, 0U);
+            (void)osSemaphoreAcquire(wake_launch_motorHandle, 0U);
         }
 
         CanMotorBus_CheckOffline(HAL_GetTick());
         if ((have_update != 0U) && (flywheel_authorized != 0U) &&
-            ((HAL_GetTick() - update.timestamp_ms) <= LAUNCH_REMOTE_TIMEOUT_MS) &&
-            (can1_m3508_id2.feedback.online != 0U) &&
-            (can1_m3508_id3.feedback.online != 0U))
+            ((HAL_GetTick() - update.timestamp_ms) <= LAUNCH_REMOTE_TIMEOUT_MS))
         {
-            M3508_SetSpeed(&can1_m3508_id2,
-                LAUNCH_M3508_ID2_DIRECTION * update.flywheel_speed_rpm);
-            M3508_SetSpeed(&can1_m3508_id3,
-                LAUNCH_M3508_ID3_DIRECTION * update.flywheel_speed_rpm);
+            if (can1_m3508_id2.feedback.online != 0U)
+            {
+                M3508_SetSpeed(&can1_m3508_id2,
+                    LAUNCH_M3508_ID2_DIRECTION * update.flywheel_speed_rpm);
+            }
+            else
+            {
+                M3508_SetSpeed(&can1_m3508_id2, 0.0f);
+            }
+
+            if (can1_m3508_id3.feedback.online != 0U)
+            {
+                M3508_SetSpeed(&can1_m3508_id3,
+                    LAUNCH_M3508_ID3_DIRECTION * update.flywheel_speed_rpm);
+            }
+            else
+            {
+                M3508_SetSpeed(&can1_m3508_id3, 0.0f);
+            }
         }
         else
         {

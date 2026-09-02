@@ -1,4 +1,4 @@
-#include "sbus.h"
+#include "dbus.h"
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
@@ -45,29 +45,31 @@ int main(void)
 {
     UART_HandleTypeDef uart;
     DMA_HandleTypeDef dma;
-    SBusData_t decoded;
-    uint8_t valid[SBUS_FRAME_LENGTH] = {0};
-    uint8_t noisy[30];
+    DBusData_t decoded;
+    uint8_t valid[DBUS_FRAME_LENGTH] = {0};
 
     uart.hdmarx = &dma;
-    valid[0] = 0x0FU;
-    valid[23] = 0x08U;
-    valid[24] = 0x00U;
-    assert(SBus_Init(&uart) == HAL_OK);
+    valid[0] = 0x00U;
+    valid[1] = 0x04U;
+    valid[2] = 0x20U;
+    valid[3] = 0x00U;
+    valid[4] = 0x00U;
+    valid[5] = (uint8_t)((2U << 4) | (3U << 6));
+    assert(DBus_Init(&uart) == HAL_OK);
 
+    fake_tick = 5U;
+    deliver(&uart, valid, DBUS_FRAME_LENGTH);
+    assert(DBus_GetData(&decoded) != 0U);
+    assert((decoded.channel[4] == 2U) && (decoded.channel[5] == 3U));
+    assert(decoded.last_update_ms == 5U);
+
+    assert(DBus_Init(&uart) == HAL_OK);
     fake_tick = 10U;
-    deliver(&uart, valid, 10U);
-    assert(SBus_GetData(&decoded) == 0U);
-    deliver(&uart, &valid[10], 15U);
-    assert(SBus_GetData(&decoded) != 0U);
-    assert((decoded.failsafe != 0U) && (decoded.last_update_ms == 10U));
-
-    assert(SBus_Init(&uart) == HAL_OK);
-    memset(noisy, 0x55, sizeof(noisy));
-    memcpy(&noisy[5], valid, sizeof(valid));
-    fake_tick = 20U;
-    deliver(&uart, noisy, sizeof(noisy));
-    assert(SBus_GetData(&decoded) != 0U);
-    assert((decoded.failsafe != 0U) && (decoded.last_update_ms == 20U));
+    deliver(&uart, valid, 8U);
+    assert(DBus_GetData(&decoded) == 0U);
+    deliver(&uart, &valid[8], DBUS_FRAME_LENGTH - 8U);
+    assert(DBus_GetData(&decoded) != 0U);
+    assert((decoded.channel[4] == 2U) && (decoded.channel[5] == 3U));
+    assert(decoded.last_update_ms == 10U);
     return 0;
 }
