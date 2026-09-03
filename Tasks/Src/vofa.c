@@ -6,10 +6,10 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-#define VOFA_CHANNEL_COUNT 3U
-#define VOFA_TX_LENGTH     (VOFA_CHANNEL_COUNT * sizeof(float) + 4U)
+#define VOFA_CHANNEL_COUNT VOFA_CONTROL_CHANNEL_COUNT
+#define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
+#define VOFA_TX_LENGTH      (VOFA_PAYLOAD_LENGTH + 4U)
 #define VOFA_COMMAND_QUEUE_DEPTH 4U
-#define RAD_TO_DEG         57.295779513082320876f
 
 static UART_HandleTypeDef *vofa_uart;
 static uint8_t rx_dma_buffer[VOFA_RX_DMA_LENGTH];
@@ -22,6 +22,8 @@ static volatile uint8_t command_write_index;
 static volatile uint8_t command_count;
 static uint8_t tx_buffer[VOFA_TX_LENGTH];
 static volatile uint8_t tx_busy;
+static volatile uint32_t vofa_heartbeat;
+static volatile uint32_t vofa_tx_ok_count;
 
 static HAL_StatusTypeDef start_rx_dma(void)
 {
@@ -61,26 +63,25 @@ uint8_t VOFA_GetCommand(char command[VOFA_COMMAND_MAX_LENGTH])
     return 1U;
 }
 
-HAL_StatusTypeDef VOFA_SendImuAngles(float roll_deg,
-                                     float pitch_deg,
-                                     float yaw_deg)
+HAL_StatusTypeDef VOFA_SendControlFrame(
+    const float channels[VOFA_CONTROL_CHANNEL_COUNT])
 {
-    float channels[VOFA_CHANNEL_COUNT];
-    if ((vofa_uart == 0) || (tx_busy != 0U)) return HAL_BUSY;
-    channels[0] = roll_deg;
-    channels[1] = pitch_deg;
-    channels[2] = yaw_deg;
-    memcpy(tx_buffer, channels, sizeof(channels));
-    tx_buffer[sizeof(channels)] = 0x00U;
-    tx_buffer[sizeof(channels) + 1U] = 0x00U;
-    tx_buffer[sizeof(channels) + 2U] = 0x80U;
-    tx_buffer[sizeof(channels) + 3U] = 0x7FU;
+    if ((vofa_uart == 0) || (channels == 0) || (tx_busy != 0U))
+        return HAL_BUSY;
+    /* Function parameters declared as arrays are pointers here.  Never use
+     * sizeof(channels): it would copy only one float on this target. */
+    memcpy(tx_buffer, channels, VOFA_PAYLOAD_LENGTH);
+    tx_buffer[VOFA_PAYLOAD_LENGTH] = 0x00U;
+    tx_buffer[VOFA_PAYLOAD_LENGTH + 1U] = 0x00U;
+    tx_buffer[VOFA_PAYLOAD_LENGTH + 2U] = 0x80U;
+    tx_buffer[VOFA_PAYLOAD_LENGTH + 3U] = 0x7FU;
     tx_busy = 1U;
     if (HAL_UART_Transmit_DMA(vofa_uart, tx_buffer, VOFA_TX_LENGTH) != HAL_OK)
     {
         tx_busy = 0U;
         return HAL_ERROR;
     }
+    ++vofa_tx_ok_count;
     return HAL_OK;
 }
 
@@ -138,6 +139,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 void VOFA_print(void *argument)
 {
     GimbalControlState_t snapshot;
+    float channels[VOFA_CONTROL_CHANNEL_COUNT];
     uint32_t primask;
     uint32_t wake_tick;
     (void)argument;
@@ -151,10 +153,33 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        (void)VOFA_SendImuAngles(
-            snapshot.imu_roll_rad * RAD_TO_DEG,
-            snapshot.imu_pitch_rad * RAD_TO_DEG,
-            snapshot.imu_yaw_rad * RAD_TO_DEG);
+        /* Closed-loop diagnostic map: target/actual position are deliberately
+         * both present so a small command can be attributed to position error
+         * or to speed-feedback noise. */
+        channels[0] = snapshot.yaw_target_rad * 57.295779513082320876f;
+        channels[1] = (float)snapshot.yaw_can_command;
+        channels[2] = (float)snapshot.yaw_encoder_count;
+        channels[3] = snapshot.yaw_motor_speed_rpm;
+        channels[4] = (float)snapshot.yaw_torque_current_ma;
+        channels[5] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
+        channels[6] = snapshot.yaw_imu_actual_rad * 57.295779513082320876f;
+        channels[7] = (float)snapshot.yaw_hold_active;
+        channels[8] = (float)(snapshot.dm4310_feedback_count % 1000000U);
+        /* Fixed signature for the target/actual diagnostic map. */
+        channels[9] = 4313.0f;
+        /* This must increase during YAWTEST.  It is the proof that CAN2
+         * accepted and completed outgoing command frames, not merely that
+         * incoming motor feedback is present. */
+        channels[10] = (float)(snapshot.can2_tx_complete_count % 1000000U);
+        channels[11] = (float)snapshot.control_inhibit_flags;
+        /* Emit only while a yaw command is being transmitted: bounded
+         * direction test or enabled closed-loop control.  UART RX remains
+         * active while idle. */
+        if ((snapshot.yaw_test_active != 0U) || (snapshot.active != 0U))
+        {
+            (void)VOFA_SendControlFrame(channels);
+            ++vofa_heartbeat;
+        }
         wake_tick += VOFA_PERIOD_MS;
         if (osDelayUntil(wake_tick) != osOK)
             wake_tick = osKernelGetTickCount();

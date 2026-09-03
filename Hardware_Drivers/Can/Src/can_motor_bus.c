@@ -1,4 +1,5 @@
 #include "can_motor_bus.h"
+#include "config.h"
 #include <string.h>
 
 M3508_t can1_m3508_id2;
@@ -11,6 +12,30 @@ static CAN_HandleTypeDef *bus_can1;
 static CAN_HandleTypeDef *bus_can2;
 static volatile CanMotorBusStatus_t tx_status;
 static uint8_t tx_fault_prepared;
+
+static void record_gimbal_commands(int16_t gm6020_id2, int16_t dm4310_id1)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    tx_status.last_gm6020_id2_command = gm6020_id2;
+    tx_status.last_dm4310_id1_command = dm4310_id1;
+    if (primask == 0U) __enable_irq();
+}
+
+static void record_tx_diagnostics(uint8_t failure_mask, uint8_t busy_mask)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    tx_status.last_send_failure_mask = failure_mask;
+    tx_status.last_send_busy_mask = busy_mask;
+    if ((busy_mask & 0x03U) != 0U) ++tx_status.can1_tx_busy_count;
+    if ((busy_mask & 0x0CU) != 0U) ++tx_status.can2_tx_busy_count;
+    tx_status.can1_tx_free_level =
+        (uint8_t)HAL_CAN_GetTxMailboxesFreeLevel(bus_can1);
+    tx_status.can2_tx_free_level =
+        (uint8_t)HAL_CAN_GetTxMailboxesFreeLevel(bus_can2);
+    if (primask == 0U) __enable_irq();
+}
 
 static HAL_StatusTypeDef configure_filter(CAN_HandleTypeDef *hcan,
                                           uint32_t filter_bank,
@@ -43,7 +68,26 @@ static HAL_StatusTypeDef send_std(CAN_HandleTypeDef *hcan, uint16_t id,
     header.RTR = CAN_RTR_DATA;
     header.DLC = 8U;
     header.TransmitGlobalTime = DISABLE;
+    /* HAL_CAN_AddTxMessage reports a full mailbox as HAL_ERROR.  It is a
+     * normal back-pressure condition, not a bus failure: the next 1 kHz
+     * control tick will submit the newest command. */
+    if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0U) return HAL_BUSY;
     return HAL_CAN_AddTxMessage(hcan, &header, data, &mailbox);
+}
+
+static void accumulate_send_result(HAL_StatusTypeDef result, uint8_t bit,
+                                   uint8_t *failure_mask, uint8_t *busy_mask,
+                                   HAL_StatusTypeDef *overall_status)
+{
+    if (result == HAL_BUSY)
+    {
+        *busy_mask |= bit;
+    }
+    else if (result != HAL_OK)
+    {
+        *failure_mask |= bit;
+        *overall_status = HAL_ERROR;
+    }
 }
 
 static void pack_slot(uint8_t data[8], uint8_t slot, int16_t command)
@@ -65,31 +109,60 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
     uint8_t can2_dm[8] = {0};
     uint16_t dm_control_id;
     HAL_StatusTypeDef status = HAL_OK;
+    uint8_t failure_mask = 0U;
+    uint8_t busy_mask = 0U;
+    HAL_StatusTypeDef result;
 
-    if ((bus_can1 == 0) || (bus_can2 == 0)) return HAL_ERROR;
-    pack_slot(can1_c620, 1U, m3508_id2);
-    pack_slot(can1_c620, 2U, m3508_id3);
-    pack_slot(can1_gm, 1U, gm6020_id2);
-    pack_slot(can2_c610, 0U, m2006_id5);
+    if ((bus_can1 == 0) || (bus_can2 == 0))
+    {
+        record_gimbal_commands(0, 0);
+        return HAL_ERROR;
+    }
+    if (YAW_COMMISSIONING_MODE == 0U)
+    {
+        if (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U)
+        {
+            pack_slot(can1_c620, 1U, m3508_id2);
+            pack_slot(can1_c620, 2U, m3508_id3);
+            pack_slot(can2_c610, 0U, m2006_id5);
+        }
+        pack_slot(can1_gm, 1U, gm6020_id2);
+    }
     if (can2_dm4310_id1.online != 0U)
     {
         if (DM4310_PackCurrentCommand(&can2_dm4310_id1, dm4310_id1,
                                       &dm_control_id, can2_dm) == 0U)
+        {
+            record_gimbal_commands(gm6020_id2, 0);
             return HAL_ERROR;
+        }
     }
 
-    if (send_std(bus_can1, 0x200U, can1_c620) != HAL_OK) status = HAL_ERROR;
-    if (send_std(bus_can1, 0x1FFU, can1_gm) != HAL_OK) status = HAL_ERROR;
-    if (can2_m2006_id5.feedback.online != 0U)
+    record_gimbal_commands((YAW_COMMISSIONING_MODE != 0U) ? 0 : gm6020_id2,
+                           (can2_dm4310_id1.online != 0U) ? dm4310_id1 : 0);
+
+    if (YAW_COMMISSIONING_MODE == 0U)
     {
-        if (send_std(bus_can2, 0x1FFU, can2_c610) != HAL_OK)
-            status = HAL_ERROR;
+        result = send_std(bus_can1, 0x200U, can1_c620);
+        accumulate_send_result(result, 1U, &failure_mask, &busy_mask, &status);
+    }
+    if (YAW_COMMISSIONING_MODE == 0U)
+    {
+        result = send_std(bus_can1, 0x1FFU, can1_gm);
+        accumulate_send_result(result, 2U, &failure_mask, &busy_mask, &status);
+    }
+    if ((YAW_COMMISSIONING_MODE == 0U) &&
+        (can2_m2006_id5.feedback.online != 0U))
+    {
+        result = send_std(bus_can2, 0x1FFU, can2_c610);
+        accumulate_send_result(result, 4U, &failure_mask, &busy_mask, &status);
     }
     if (can2_dm4310_id1.online != 0U)
     {
-        if (send_std(bus_can2, dm_control_id, can2_dm) != HAL_OK)
-            status = HAL_ERROR;
+        result = send_std(bus_can2, dm_control_id, can2_dm);
+        accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
     }
+    record_tx_diagnostics(failure_mask, busy_mask);
     return status;
 }
 
@@ -161,18 +234,10 @@ static void prepare_tx_fault(void)
 {
     if (tx_fault_prepared != 0U) return;
     reset_all_control();
-    if (bus_can1 != 0)
-    {
-        (void)HAL_CAN_AbortTxRequest(bus_can1, CAN_TX_MAILBOX0 |
-                                    CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
-        (void)HAL_CAN_ResetError(bus_can1);
-    }
-    if (bus_can2 != 0)
-    {
-        (void)HAL_CAN_AbortTxRequest(bus_can2, CAN_TX_MAILBOX0 |
-                                    CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
-        (void)HAL_CAN_ResetError(bus_can2);
-    }
+    /* Do not abort mailboxes here.  Aborting CAN2 can cancel a valid current
+     * command, then replace it with a zero-current frame on every recovery
+     * cycle.  AutoBusOff is enabled by CAN init, so genuine bus recovery is
+     * handled by the peripheral while the controller keeps requesting zero. */
     tx_fault_prepared = 1U;
 }
 
@@ -234,12 +299,14 @@ HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
     HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
     HAL_NVIC_SetPriority(CAN2_SCE_IRQn, 5U, 0U);
     HAL_NVIC_EnableIRQ(CAN2_SCE_IRQn);
-    if (HAL_CAN_ActivateNotification(can1, CAN_IT_RX_FIFO0_MSG_PENDING |
+    if (HAL_CAN_ActivateNotification(can1, CAN_IT_TX_MAILBOX_EMPTY |
+                                     CAN_IT_RX_FIFO0_MSG_PENDING |
                                      CAN_IT_ERROR_WARNING |
                                      CAN_IT_ERROR_PASSIVE | CAN_IT_BUSOFF |
                                      CAN_IT_LAST_ERROR_CODE | CAN_IT_ERROR) != HAL_OK)
         return HAL_ERROR;
-    if (HAL_CAN_ActivateNotification(can2, CAN_IT_RX_FIFO0_MSG_PENDING |
+    if (HAL_CAN_ActivateNotification(can2, CAN_IT_TX_MAILBOX_EMPTY |
+                                     CAN_IT_RX_FIFO0_MSG_PENDING |
                                      CAN_IT_ERROR_WARNING |
                                      CAN_IT_ERROR_PASSIVE | CAN_IT_BUSOFF |
                                      CAN_IT_LAST_ERROR_CODE | CAN_IT_ERROR) != HAL_OK)
@@ -276,6 +343,13 @@ HAL_StatusTypeDef CanMotorBus_Update(float dt_s)
     dm4310_id1 = DM4310_Update(&can2_dm4310_id1, dt_s);
     return guarded_send_commands(m3508_id2, m3508_id3, gm6020_id2,
                                  m2006_id5, dm4310_id1);
+}
+
+HAL_StatusTypeDef CanMotorBus_SendYawTestCurrent(int16_t current)
+{
+    CanMotorBus_CheckOffline(HAL_GetTick());
+    if (can2_dm4310_id1.online == 0U) return HAL_ERROR;
+    return guarded_send_commands(0, 0, 0, 0, current);
 }
 
 HAL_StatusTypeDef CanMotorBus_StopGimbal(float dt_s)
@@ -318,6 +392,34 @@ void CanMotorBus_GetStatus(CanMotorBusStatus_t *status)
     if (primask == 0U) __enable_irq();
 }
 
+static void record_tx_complete(CAN_HandleTypeDef *hcan)
+{
+    uint32_t primask;
+    if ((hcan != bus_can1) && (hcan != bus_can2)) return;
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (hcan == bus_can1)
+        ++tx_status.can1_tx_complete_count;
+    else
+        ++tx_status.can2_tx_complete_count;
+    if (primask == 0U) __enable_irq();
+}
+
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    record_tx_complete(hcan);
+}
+
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    record_tx_complete(hcan);
+}
+
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    record_tx_complete(hcan);
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CAN_RxHeaderTypeDef header;
@@ -342,12 +444,16 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
         }
         else if (hcan == bus_can2)
         {
+            tx_status.last_can2_rx_std_id = (uint16_t)header.StdId;
             if ((header.StdId == 0x205U) && (header.DLC == 8U))
                 M2006_Decode(&can2_m2006_id5, data, now_ms);
             else if ((header.StdId ==
                       (DM4310_FEEDBACK_BASE_ID + can2_dm4310_id1.id)) &&
                      (header.DLC == 8U))
+            {
                 DM4310_Decode(&can2_dm4310_id1, data, now_ms);
+                ++tx_status.dm4310_feedback_count;
+            }
         }
     }
 }
@@ -361,13 +467,9 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
     primask = __get_PRIMASK();
     __disable_irq();
     ++tx_status.bus_error_count;
-    ++tx_status.total_tx_failures;
-    tx_status.recovery_zero_frames = 0U;
-    if (tx_status.consecutive_tx_failures < UINT16_MAX)
-        ++tx_status.consecutive_tx_failures;
-    if (((error & (HAL_CAN_ERROR_BOF | HAL_CAN_ERROR_EPV)) != 0U) ||
-        (tx_status.consecutive_tx_failures >=
-         CAN_MOTOR_TX_FAILURE_LATCH_COUNT))
-        tx_status.fault_latched = 1U;
+    /* A last-error-code interrupt can be raised by a transient receive-side
+     * error.  It is not proof that a motor command was lost.  Actual command
+     * enqueue failures are recorded in record_tx_result(). */
+    (void)error;
     if (primask == 0U) __enable_irq();
 }

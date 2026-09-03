@@ -15,8 +15,20 @@ typedef struct
 {
     uint32_t total_tx_failures;
     uint32_t bus_error_count;
+    uint32_t dm4310_feedback_count;
+    uint32_t can1_tx_complete_count;
+    uint32_t can2_tx_complete_count;
+    uint32_t can1_tx_busy_count;
+    uint32_t can2_tx_busy_count;
+    uint16_t last_can2_rx_std_id;
     uint16_t consecutive_tx_failures;
     uint16_t recovery_zero_frames;
+    int16_t last_gm6020_id2_command;
+    int16_t last_dm4310_id1_command;
+    uint8_t last_send_failure_mask;
+    uint8_t last_send_busy_mask;
+    uint8_t can1_tx_free_level;
+    uint8_t can2_tx_free_level;
     uint8_t fault_latched;
 } CanMotorBusStatus_t;
 
@@ -29,6 +41,7 @@ extern DM4310_t can2_dm4310_id1;
 HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
                                    CAN_HandleTypeDef *can2);
 HAL_StatusTypeDef CanMotorBus_Update(float dt_s);
+HAL_StatusTypeDef CanMotorBus_SendYawTestCurrent(int16_t current);
 HAL_StatusTypeDef CanMotorBus_StopGimbal(float dt_s);
 HAL_StatusTypeDef CanMotorBus_StopAll(void);
 void CanMotorBus_CheckOffline(uint32_t now_ms);

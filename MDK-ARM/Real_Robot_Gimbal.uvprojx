@@ -450,14 +450,34 @@
               <FilePath>../Tasks/Inc/config.h</FilePath>
             </File>
             <File>
+              <FileName>pid_parameter.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../Tasks/Inc/pid_parameter.h</FilePath>
+            </File>
+            <File>
+              <FileName>yaw_hold.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../Tasks/Inc/yaw_hold.h</FilePath>
+            </File>
+            <File>
               <FileName>data_process.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Tasks/Src/data_process.c</FilePath>
             </File>
             <File>
+              <FileName>pid_parameter.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Tasks/Src/pid_parameter.c</FilePath>
+            </File>
+            <File>
               <FileName>pid_calc.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Tasks/Src/pid_calc.c</FilePath>
+            </File>
+            <File>
+              <FileName>yaw_hold.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Tasks/Src/yaw_hold.c</FilePath>
             </File>
             <File>
               <FileName>vofa.c</FileName>

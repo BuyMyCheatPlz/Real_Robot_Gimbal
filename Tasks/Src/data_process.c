@@ -5,6 +5,7 @@
 #include "dbus.h"
 #include "vofa.h"
 #include "config.h"
+#include "pid_parameter.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,8 @@ extern osSemaphoreId_t wake_launchHandle;
 extern osSemaphoreId_t wake_launch_motorHandle;
 
 #define COMMAND_STEP_RAD             (GIMBAL_COMMAND_STEP_DEG * TASK_DEG_TO_RAD)
+#define PI_F                         3.14159265358979323846f
+#define TWO_PI_F                     (2.0f * PI_F)
 
 typedef struct
 {
@@ -26,6 +29,15 @@ typedef struct
     uint32_t sample_count;
     uint8_t initialized;
 } AttitudeEstimator_t;
+
+/* IMU yaw is a relative heading.  Keep it bounded for display and home
+ * calculations; motor encoder position remains unwrapped in PID_calc. */
+static float normalize_yaw_rad(float angle)
+{
+    while (angle >= PI_F) angle -= TWO_PI_F;
+    while (angle < -PI_F) angle += TWO_PI_F;
+    return angle;
+}
 
 static int8_t dbus_channel_sign(uint16_t channel)
 {
@@ -58,37 +70,20 @@ static void queue_latest(const TargetAngleMessage_t *message)
     }
 }
 
-static uint8_t parse_pid_command(const char *command,
-                                 PidParameterUpdate_t *update)
+static uint8_t parse_yaw_test_command(const char *command, int16_t *current)
 {
-    const char *equals;
+    const char prefix[] = "YAWTEST=";
     char *end;
-    size_t key_length;
-    if ((command == 0) || (update == 0)) return 0U;
-    equals = strchr(command, '=');
-    if (equals == 0) return 0U;
-    key_length = (size_t)(equals - command);
-    if ((key_length == 6U) && (strncmp(command, "KP_POS", 6U) == 0))
-        update->id = PID_PARAM_KP_POS;
-    else if ((key_length == 6U) && (strncmp(command, "KI_POS", 6U) == 0))
-        update->id = PID_PARAM_KI_POS;
-    else if ((key_length == 6U) && (strncmp(command, "KD_POS", 6U) == 0))
-        update->id = PID_PARAM_KD_POS;
-    else if ((key_length == 6U) && (strncmp(command, "KP_SPD", 6U) == 0))
-        update->id = PID_PARAM_KP_SPD;
-    else if ((key_length == 6U) && (strncmp(command, "KI_SPD", 6U) == 0))
-        update->id = PID_PARAM_KI_SPD;
-    else if ((key_length == 6U) && (strncmp(command, "KD_SPD", 6U) == 0))
-        update->id = PID_PARAM_KD_SPD;
-    else
+    long value;
+    if ((command == 0) || (current == 0) ||
+        (strncmp(command, prefix, sizeof(prefix) - 1U) != 0))
         return 0U;
-
-    update->value = strtof(equals + 1, &end);
-    if (end == (equals + 1)) return 0U;
-    while ((*end == ' ') || (*end == '\t')) ++end;
-    if ((*end != '\0') || (isfinite(update->value) == 0) ||
-        (update->value < 0.0f) || (update->value > ONLINE_PID_VALUE_MAX))
+    value = strtol(command + sizeof(prefix) - 1U, &end, 10);
+    if ((end == command + sizeof(prefix) - 1U) || (*end != '\0') ||
+        (value < -YAW_DIRECTION_TEST_MAX_CURRENT) ||
+        (value > YAW_DIRECTION_TEST_MAX_CURRENT))
         return 0U;
+    *current = (int16_t)value;
     return 1U;
 }
 
@@ -97,9 +92,15 @@ static void process_vofa_commands(void)
     char command[VOFA_COMMAND_MAX_LENGTH];
     PidParameterUpdate_t update;
     PidParameterUpdate_t discarded;
+    int16_t yaw_test_current;
     while (VOFA_GetCommand(command) != 0U)
     {
-        if (parse_pid_command(command, &update) == 0U) continue;
+        if (parse_yaw_test_command(command, &yaw_test_current) != 0U)
+        {
+            Gimbal_YawTest_Request(yaw_test_current);
+            continue;
+        }
+        if (PidParameter_Parse(command, &update) == 0U) continue;
         if (osMessageQueuePut(Update_PID_paraHandle, &update, 0U, 0U) != osOK)
         {
             (void)osMessageQueueGet(Update_PID_paraHandle, &discarded, 0, 0U);
@@ -194,7 +195,7 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
         if ((dt <= 0.0f) || (dt > ATTITUDE_MAX_DT_S)) dt = CONTROL_PERIOD_S;
         estimator->roll += gx * dt;
         estimator->pitch += gy * dt;
-        estimator->yaw += gz * dt;
+        estimator->yaw = normalize_yaw_rad(estimator->yaw + gz * dt);
         estimator->roll = estimator->roll * (1.0f - ATTITUDE_ACCEL_WEIGHT) +
                           roll_acc * ATTITUDE_ACCEL_WEIGHT;
         estimator->pitch = estimator->pitch * (1.0f - ATTITUDE_ACCEL_WEIGHT) +

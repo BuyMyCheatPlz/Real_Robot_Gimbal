@@ -45,6 +45,7 @@ real_robot_gimbal\data_process.o: ../Hardware_Drivers/Dm4310/Inc/dm4310.h
 real_robot_gimbal\data_process.o: ../Hardware_Drivers/Remote_Ctrl/Inc/dbus.h
 real_robot_gimbal\data_process.o: ../Tasks/Inc/vofa.h
 real_robot_gimbal\data_process.o: ../Tasks/Inc/config.h
+real_robot_gimbal\data_process.o: ../Tasks/Inc/pid_parameter.h
 real_robot_gimbal\data_process.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 real_robot_gimbal\data_process.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 real_robot_gimbal\data_process.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

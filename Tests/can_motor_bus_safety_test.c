@@ -12,6 +12,9 @@ typedef struct
 static uint32_t fake_tick;
 static uint32_t fake_error;
 static uint8_t fail_transmit;
+static uint8_t can1_free_level = 3U;
+static uint8_t can2_free_level = 3U;
+static uint32_t abort_request_count;
 static SentFrame_t sent_frames[16];
 static uint8_t sent_count;
 
@@ -65,6 +68,7 @@ HAL_StatusTypeDef HAL_CAN_AbortTxRequest(CAN_HandleTypeDef *hcan,
 {
     (void)hcan;
     (void)mailboxes;
+    ++abort_request_count;
     return HAL_OK;
 }
 HAL_StatusTypeDef HAL_CAN_ResetError(CAN_HandleTypeDef *hcan)
@@ -77,6 +81,10 @@ uint32_t HAL_CAN_GetError(const CAN_HandleTypeDef *hcan)
 {
     (void)hcan;
     return fake_error;
+}
+uint32_t HAL_CAN_GetTxMailboxesFreeLevel(const CAN_HandleTypeDef *hcan)
+{
+    return (hcan->Instance == (void *)1) ? can1_free_level : can2_free_level;
 }
 uint32_t HAL_CAN_GetRxFifoFillLevel(const CAN_HandleTypeDef *hcan,
                                    uint32_t fifo)
@@ -97,6 +105,7 @@ HAL_StatusTypeDef HAL_CAN_GetRxMessage(CAN_HandleTypeDef *hcan, uint32_t fifo,
 }
 
 void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan);
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan);
 
 static const SentFrame_t *find_frame(uint16_t id)
 {
@@ -116,23 +125,46 @@ int main(void)
 
     memset(&can1, 0, sizeof(can1));
     memset(&can2, 0, sizeof(can2));
+    can1.Instance = (void *)1;
+    can2.Instance = (void *)2;
     assert(CanMotorBus_Init(&can1, &can2) == HAL_OK);
 
-    can1_m3508_id2.feedback.online = 1U;
-    can1_m3508_id3.feedback.online = 1U;
-    can2_m2006_id5.feedback.online = 1U;
-    MotorSpeedPid_Init(&can1_m3508_id2.speed_pid, 1.0f, 0.0f,
-                       M3508_CURRENT_LIMIT, M3508_CURRENT_LIMIT);
-    M3508_SetSpeed(&can1_m3508_id2, 100.0f);
+    can2_dm4310_id1.online = 1U;
     sent_count = 0U;
-    assert(CanMotorBus_StopGimbal(0.001f) == HAL_OK);
-    assert(can1_m3508_id2.target_speed_rpm == 100.0f);
+    assert(CanMotorBus_SendYawTestCurrent(100) == HAL_OK);
     frame = find_frame(0x200U);
     assert(frame != 0);
-    assert((frame->data[2] == 0x00U) && (frame->data[3] == 0x64U));
+    assert((frame->data[0] == 0U) && (frame->data[7] == 0U));
+    frame = find_frame(0x1FFU);
+    assert(frame != 0);
+    assert((frame->data[0] == 0U) && (frame->data[7] == 0U));
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
     assert(frame != 0);
-    assert((frame->data[0] == 0U) && (frame->data[1] == 0U));
+    assert((frame->data[0] == 0U) && (frame->data[1] == 100U));
+    HAL_CAN_TxMailbox0CompleteCallback(&can2);
+    CanMotorBus_GetStatus(&status);
+    assert(status.can2_tx_complete_count == 1U);
+
+    /* CAN1 uses the same non-destructive back-pressure policy for both
+     * 0x200 (C620) and 0x1FF (GM6020) command frames. */
+    can1_free_level = 0U;
+    assert(CanMotorBus_SendYawTestCurrent(100) == HAL_OK);
+    CanMotorBus_GetStatus(&status);
+    assert((status.last_send_busy_mask == 3U) &&
+           (status.can1_tx_busy_count == 1U) &&
+           (CanMotorBus_TxHealthy() != 0U));
+    can1_free_level = 3U;
+
+    /* A full hardware mailbox is soft back-pressure, not a transmission
+     * failure.  The next control cycle submits the newest command. */
+    can2_free_level = 0U;
+    for (index = 0U; index < 5U; ++index)
+        assert(CanMotorBus_SendYawTestCurrent(100) == HAL_OK);
+    CanMotorBus_GetStatus(&status);
+    assert((status.last_send_busy_mask == 8U) &&
+           (status.can2_tx_busy_count == 5U) &&
+           (CanMotorBus_TxHealthy() != 0U));
+    can2_free_level = 3U;
 
     fail_transmit = 1U;
     for (index = 0U; index < CAN_MOTOR_TX_FAILURE_LATCH_COUNT; ++index)
@@ -145,12 +177,13 @@ int main(void)
     for (index = 0U; index < CAN_MOTOR_TX_RECOVERY_FRAME_COUNT; ++index)
         assert(CanMotorBus_StopAll() == HAL_ERROR);
     assert(CanMotorBus_TxHealthy() != 0U);
+    assert(abort_request_count == 0U);
     assert(CanMotorBus_StopAll() == HAL_OK);
 
     fake_error = HAL_CAN_ERROR_BOF;
     HAL_CAN_ErrorCallback(&can1);
     CanMotorBus_GetStatus(&status);
-    assert((status.fault_latched != 0U) &&
+    assert((status.fault_latched == 0U) &&
            (status.bus_error_count == 1U));
     return 0;
 }

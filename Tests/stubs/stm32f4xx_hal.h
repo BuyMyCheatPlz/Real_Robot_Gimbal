@@ -84,6 +84,7 @@ typedef struct
 #define CAN_IT_BUSOFF                    (1U << 3)
 #define CAN_IT_LAST_ERROR_CODE           (1U << 4)
 #define CAN_IT_ERROR                     (1U << 5)
+#define CAN_IT_TX_MAILBOX_EMPTY           (1U << 6)
 #define CAN_TX_MAILBOX0                  (1U << 0)
 #define CAN_TX_MAILBOX1                  (1U << 1)
 #define CAN_TX_MAILBOX2                  (1U << 2)
@@ -118,6 +119,7 @@ HAL_StatusTypeDef HAL_CAN_AbortTxRequest(CAN_HandleTypeDef *hcan,
                                         uint32_t mailboxes);
 HAL_StatusTypeDef HAL_CAN_ResetError(CAN_HandleTypeDef *hcan);
 uint32_t HAL_CAN_GetError(const CAN_HandleTypeDef *hcan);
+uint32_t HAL_CAN_GetTxMailboxesFreeLevel(const CAN_HandleTypeDef *hcan);
 uint32_t HAL_CAN_GetRxFifoFillLevel(const CAN_HandleTypeDef *hcan,
                                    uint32_t fifo);
 HAL_StatusTypeDef HAL_CAN_GetRxMessage(CAN_HandleTypeDef *hcan, uint32_t fifo,

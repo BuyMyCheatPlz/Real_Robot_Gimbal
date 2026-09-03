@@ -11,7 +11,7 @@
 #define CONTROL_MAX_DT_S                   0.010f
 #define LAUNCH_REMOTE_TIMEOUT_MS          100U
 #define LAUNCH_TASK_WAIT_MS               2U
-#define VOFA_PERIOD_MS                    20U
+#define VOFA_PERIOD_MS                    10U
 #define ONLINE_PID_VALUE_MAX              100000.0f
 
 /* ---------------- 遥控器通道与线性映射 ---------------- */
@@ -52,52 +52,84 @@
 #define PITCH_SPEED_LPF_ALPHA             0.20f
 #define YAW_ENCODER_LPF_ALPHA             0.15f
 #define YAW_SPEED_LPF_ALPHA               0.20f
+/* IMU Yaw is the current outer-loop position measurement.  Filter it before
+ * it reaches the position PID; the motor encoder remains the inner speed
+ * feedback source. */
+#define YAW_IMU_POSITION_LPF_ALPHA         0.02f
+/* Final-target hold uses hysteresis and is disabled while the trajectory is
+ * moving.  The exit threshold matches the required <=0.2 degree accuracy. */
+#define YAW_HOLD_ENTER_ERROR_RAD           (0.10f * TASK_DEG_TO_RAD)
+#define YAW_HOLD_EXIT_ERROR_RAD            (0.20f * TASK_DEG_TO_RAD)
+#define YAW_HOLD_ENTER_SPEED_RPM            0.20f
+#define YAW_PROFILE_SETTLED_POSITION_RAD   (0.01f * TASK_DEG_TO_RAD)
+#define YAW_PROFILE_SETTLED_SPEED_RAD_S     0.005f
+/* 0: capture and hold the current yaw when control is authorized (safe
+ * commissioning default).  1: automatically move to IMU yaw zero. */
+/* Keep the present encoder position during first closed-loop commissioning.
+ * IMU yaw is integrated and can contain several historical turns; using it
+ * blindly as an automatic home target causes a saturated startup command. */
+#define YAW_HOME_TO_IMU_ZERO_ON_AUTHORIZE   0U
+/* 0 enables the two gimbal axes.  Launch outputs are controlled separately
+ * so enabling Pitch cannot unexpectedly start the flywheel or feeder. */
+#define YAW_COMMISSIONING_MODE                0U
+#define LAUNCH_MOTOR_OUTPUT_ENABLE            0U
+#define YAW_CLOSED_LOOP_ENABLE                1U
+/* Motor encoder radians divided by this ratio equals output-axis radians.
+ * Keep 1.0 only for direct drive; set the actual reduction ratio otherwise. */
+#define YAW_ENCODER_TO_OUTPUT_RATIO           1.0f
+#define YAW_DIRECTION_TEST_MAX_CURRENT         20
+#define YAW_DIRECTION_TEST_DURATION_MS         200U
 
 /* ---------------- Pitch：GM6020 外位置环 + 内速度环 ---------------- */
-#define PITCH_ANGLE_KP_RPM_PER_RAD        90.0f
+#define PITCH_ANGLE_KP_RPM_PER_RAD        20.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
 #define PITCH_ANGLE_KD_RPM_S_PER_RAD      2.0f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
-#define PITCH_MAX_SPEED_RPM               120.0f
-#define PITCH_SPEED_KP                    80.0f
-#define PITCH_SPEED_KI                    8.0f
+#define PITCH_MAX_SPEED_RPM                30.0f
+#define PITCH_SPEED_KP                    10.0f
+#define PITCH_SPEED_KI                     0.0f
 #define PITCH_SPEED_KD                    0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT        30000.0f
-#define PITCH_SPEED_OUTPUT_LIMIT          30000.0f
+#define PITCH_SPEED_OUTPUT_LIMIT           3000.0f
 #define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 80.0f
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE      1200.0f
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         0.0f
 #define PITCH_GRAVITY_ZERO_RAD            0.0f
 #define PITCH_GRAVITY_SIGN                1.0f
 #define PITCH_MOTOR_SIGN                  1.0f
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ---------------- */
-#define YAW_ANGLE_KP_RAD_S_PER_RAD        5.0f
+#define YAW_ANGLE_KP_RAD_S_PER_RAD        0.50f
 #define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.0f
-#define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.10f
+#define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.0f
 #define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    1.0f
-#define YAW_MAX_SPEED_RAD_S               4.0f
+#define YAW_MAX_SPEED_RAD_S               0.15f
 /* Yaw reference trajectory.  The profile is output-axis radians. */
-#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    2.0f
-#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2  15.0f
+#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    0.15f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   0.50f
 /* 0 disables velocity feedforward; 1 applies the planned speed directly. */
-#define YAW_VELOCITY_FF_GAIN              1.0f
+#define YAW_VELOCITY_FF_GAIN              0.0f
 /* Directly tunable torque feedforward: CAN current-command counts per
  * output-axis rad/s^2.  Keep zero until the PID loops are stable.  Positive
- * means positive output-axis acceleration; YAW_MOTOR_SIGN is applied by the
+ * means positive output-axis acceleration; YAW_MOTOR_COMMAND_SIGN is applied by the
  * controller. */
 #define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 0.0f
 #define YAW_ACCELERATION_FF_CURRENT_LIMIT 800.0f
-#define YAW_SPEED_KP_CURRENT_PER_RPM       80.0f
-#define YAW_SPEED_KI_CURRENT_PER_RPM_S      8.0f
+#define YAW_SPEED_KP_CURRENT_PER_RPM        2.0f
+#define YAW_SPEED_KI_CURRENT_PER_RPM_S      0.0f
 #define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
 #define YAW_SPEED_INTEGRAL_LIMIT_CURRENT 1500.0f
-/* ±16384 对应铭牌最大电流；首次上板保守限制为约 18%。 */
-#define YAW_CURRENT_OUTPUT_LIMIT          3000.0f
+/* Commissioning limit: raise only after confirming the motor direction and
+ * CAN command path.  ±16384 is the motor's rated full-scale command. */
+#define YAW_CURRENT_OUTPUT_LIMIT            20.0f
 #define YAW_SPEED_INTEGRAL_SEPARATION_RPM 30.0f
 #define YAW_ANGLE_INTEGRAL_SEPARATION_RAD (20.0f * TASK_DEG_TO_RAD)
-#define YAW_MOTOR_SIGN                    1.0f
+/* Bench tests: +current increases encoder count, raw speed, encoder angle,
+ * and IMU yaw; -current decreases all four.  Command and encoder signs are
+ * therefore both positive on this installation. */
+#define YAW_MOTOR_COMMAND_SIGN             1.0f
+#define YAW_ENCODER_SIGN                   1.0f
 #define YAW_SOFT_LIMIT_DEG                180.0f
 
 /* ---------------- 发射 M3508 ID2 速度环 PID ---------------- */
