@@ -5,6 +5,7 @@
 #include "dm4310.h"
 #include "config.h"
 #include "yaw_hold.h"
+#include "yaw_startup.h"
 #include <math.h>
 #include <string.h>
 
@@ -195,7 +196,14 @@ void PID_calc(void *argument)
         YAW_PROFILE_SETTLED_POSITION_RAD,
         YAW_PROFILE_SETTLED_SPEED_RAD_S
     };
+    const YawStartupConfig_t yaw_startup_config = {
+        YAW_STARTUP_SETTLE_TIME_MS,
+        YAW_STARTUP_MAX_FEEDBACK_AGE_MS,
+        YAW_STARTUP_MAX_SPEED_RPM,
+        YAW_STARTUP_MAX_POSITION_DRIFT_RAD
+    };
     YawHoldState_t yaw_hold_state = {0U};
+    YawStartupState_t yaw_startup_state = {0U};
     int32_t pitch_total_count = 0;
     uint16_t pitch_previous_count = 0U;
     int32_t yaw_total_count = 0;
@@ -223,8 +231,9 @@ void PID_calc(void *argument)
     uint32_t wake_tick;
     uint32_t control_overrun_count = 0U;
     float control_dt_s = CONTROL_PERIOD_S;
-    uint8_t encoder_initialized = 0U;
-    uint8_t targets_initialized = 0U;
+    uint8_t pitch_encoder_initialized = 0U;
+    uint8_t pitch_target_initialized = 0U;
+    uint8_t yaw_target_initialized = 0U;
     uint8_t yaw_encoder_initialized = 0U;
     uint8_t remote_valid = 0U;
     uint8_t imu_initialized = 0U;
@@ -351,14 +360,14 @@ void PID_calc(void *argument)
                 remote_valid = 0U;
             if ((message.flags & GIMBAL_MSG_PITCH_DELTA) != 0U)
             {
-                if (targets_initialized != 0U)
+                if (pitch_target_initialized != 0U)
                     pitch_target += message.pitch_delta_rad;
                 else
                     pending_pitch_delta += message.pitch_delta_rad;
             }
             if ((message.flags & GIMBAL_MSG_YAW_DELTA) != 0U)
             {
-                if (targets_initialized != 0U)
+                if (yaw_target_initialized != 0U)
                     yaw_target += message.yaw_delta_rad;
                 else
                     pending_yaw_delta += message.yaw_delta_rad;
@@ -370,13 +379,13 @@ void PID_calc(void *argument)
         if (can1_gm6020_id2.feedback.online != 0U)
         {
             uint16_t count = can1_gm6020_id2.feedback.encoder;
-            if (encoder_initialized == 0U)
+            if (pitch_encoder_initialized == 0U)
             {
                 pitch_previous_count = count;
                 pitch_total_count = (int32_t)count;
                 pitch_encoder_filtered = PITCH_MOTOR_SIGN * (float)count *
                                          TWO_PI_F / (float)DJI_ENCODER_COUNTS;
-                encoder_initialized = 1U;
+                pitch_encoder_initialized = 1U;
             }
             else
             {
@@ -425,17 +434,27 @@ void PID_calc(void *argument)
             uint8_t imu_fresh = (uint8_t)((imu_initialized != 0U) &&
                 ((now_ms - last_imu_ms) <= IMU_DATA_TIMEOUT_MS));
             uint8_t feedback_healthy = (uint8_t)(
-                (can2_dm4310_id1.online != 0U) && (imu_fresh != 0U));
+                (can2_dm4310_id1.online != 0U) &&
+                (((YAW_COMMISSIONING_MODE != 0U) ||
+                  (can1_gm6020_id2.feedback.online != 0U))) &&
+                (imu_fresh != 0U));
             uint8_t remote_fresh = (uint8_t)((remote_valid != 0U) &&
                 ((now_ms - last_remote_ms) <= REMOTE_COMMAND_TIMEOUT_MS));
             uint8_t can_healthy = CanMotorBus_TxHealthy();
             uint8_t yaw_test_active;
             int16_t yaw_test_current = yaw_test_current_get(now_ms,
                                                               &yaw_test_active);
-            uint8_t control_permitted = (uint8_t)(
-                (feedback_healthy != 0U) && (remote_fresh != 0U) &&
-                (can_healthy != 0U) && (overrun_pending == 0U) &&
-                (YAW_CLOSED_LOOP_ENABLE != 0U));
+            uint8_t common_control_permitted = (uint8_t)(
+                (imu_fresh != 0U) && (remote_fresh != 0U) &&
+                (can_healthy != 0U) && (overrun_pending == 0U));
+            uint8_t pitch_control_permitted = (uint8_t)(
+                (common_control_permitted != 0U) &&
+                (YAW_COMMISSIONING_MODE == 0U) &&
+                (can1_gm6020_id2.feedback.online != 0U));
+            uint8_t yaw_control_permitted = (uint8_t)(
+                (common_control_permitted != 0U) &&
+                (YAW_CLOSED_LOOP_ENABLE != 0U) &&
+                (can2_dm4310_id1.online != 0U));
             uint32_t control_inhibit_flags = 0U;
             HAL_StatusTypeDef motor_status = HAL_ERROR;
             CanMotorBusStatus_t bus_status;
@@ -456,34 +475,58 @@ void PID_calc(void *argument)
             if (overrun_pending != 0U)
                 control_inhibit_flags |= GIMBAL_INHIBIT_OVERRUN;
 
-            if (control_permitted == 0U)
+            if (remote_fresh == 0U)
             {
-                targets_initialized = 0U;
-                encoder_initialized = 0U;
+                pending_pitch_delta = 0.0f;
+                pending_yaw_delta = 0.0f;
+            }
+
+            if (pitch_control_permitted == 0U)
+            {
+                pitch_target_initialized = 0U;
+                pitch_encoder_initialized = 0U;
+                reset_position_pid(&pitch_angle_pid);
+                MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+            }
+            if (yaw_control_permitted == 0U)
+            {
+                yaw_target_initialized = 0U;
                 yaw_encoder_initialized = 0U;
-                /* Preserve the first valid remote step while feedback/IMU
-                 * establishment is still in progress.  Drop it only after
-                 * the remote command itself becomes stale. */
-                if (remote_fresh == 0U)
-                {
-                    pending_pitch_delta = 0.0f;
-                    pending_yaw_delta = 0.0f;
-                }
                 yaw_profile_speed = 0.0f;
                 yaw_profile_acceleration = 0.0f;
                 YawHold_Reset(&yaw_hold_state);
-                reset_position_pid(&pitch_angle_pid);
+                YawStartup_Reset(&yaw_startup_state);
                 reset_position_pid(&yaw_angle_pid);
-                MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
                 MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
             }
-            else if ((targets_initialized == 0U) &&
-                     (encoder_initialized != 0U) &&
-                     (yaw_encoder_initialized != 0U))
+
+            if ((pitch_control_permitted != 0U) &&
+                (pitch_target_initialized == 0U) &&
+                (pitch_encoder_initialized != 0U))
             {
                 pitch_encoder_offset = pitch_encoder_filtered - imu_pitch;
                 pitch_angle_actual = imu_pitch;
                 pitch_home = 0.0f;
+                pitch_target = pitch_home + pending_pitch_delta;
+                pending_pitch_delta = 0.0f;
+                pitch_target_initialized = 1U;
+            }
+            else if (pitch_target_initialized != 0U)
+            {
+                pitch_angle_actual = pitch_encoder_filtered -
+                                     pitch_encoder_offset;
+            }
+
+            if ((yaw_control_permitted != 0U) &&
+                (yaw_target_initialized == 0U) &&
+                (yaw_encoder_initialized != 0U) &&
+                (YawStartup_Update(
+                     &yaw_startup_state, &yaw_startup_config,
+                     now_ms, can2_dm4310_id1.last_update_ms,
+                     yaw_angle_filtered,
+                     YAW_ENCODER_SIGN * can2_dm4310_id1.speed_rpm /
+                     YAW_ENCODER_TO_OUTPUT_RATIO) != 0U))
+            {
                 /* Encoder is the closed-loop measurement.  To return the
                  * output axis to the IMU's relative yaw zero, transform that
                  * IMU error into the encoder reference frame.  The two signs
@@ -492,32 +535,24 @@ void PID_calc(void *argument)
                     yaw_home = yaw_angle_filtered - yaw_imu_filtered;
                 else
                     yaw_home = yaw_angle_filtered;
-                /* Both axes use the IMU reference frame after authorization:
-                 * Pitch returns to its IMU zero and Yaw returns to the IMU's
-                 * relative yaw zero.  Preserve any remote step received
-                 * before initialization. */
-                pitch_target = pitch_home + pending_pitch_delta;
                 yaw_target = yaw_home + pending_yaw_delta;
                 yaw_profile_target = yaw_angle_filtered;
                 yaw_profile_speed = 0.0f;
                 yaw_profile_acceleration = 0.0f;
-                pending_pitch_delta = 0.0f;
                 pending_yaw_delta = 0.0f;
                 YawHold_Reset(&yaw_hold_state);
-                targets_initialized = 1U;
-            }
-            else if (targets_initialized != 0U)
-            {
-                pitch_angle_actual = pitch_encoder_filtered -
-                                     pitch_encoder_offset;
+                yaw_target_initialized = 1U;
             }
 
-            if (targets_initialized != 0U)
+            if (pitch_target_initialized != 0U)
             {
                 if (pitch_target > pitch_home + PITCH_SOFT_LIMIT_RAD)
                     pitch_target = pitch_home + PITCH_SOFT_LIMIT_RAD;
                 if (pitch_target < pitch_home - PITCH_SOFT_LIMIT_RAD)
                     pitch_target = pitch_home - PITCH_SOFT_LIMIT_RAD;
+            }
+            if (yaw_target_initialized != 0U)
+            {
                 if (yaw_target > yaw_home + YAW_SOFT_LIMIT_RAD)
                     yaw_target = yaw_home + YAW_SOFT_LIMIT_RAD;
                 if (yaw_target < yaw_home - YAW_SOFT_LIMIT_RAD)
@@ -533,77 +568,83 @@ void PID_calc(void *argument)
                 MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
                 motor_status = CanMotorBus_SendYawTestCurrent(yaw_test_current);
             }
-            else if ((control_permitted != 0U) &&
-                (targets_initialized != 0U))
+            else if ((pitch_target_initialized != 0U) ||
+                     (yaw_target_initialized != 0U))
             {
-                float pitch_speed_target;
-                float yaw_feedback;
-                float yaw_speed_target_rad_s;
-                float gravity_feedforward;
+                float gravity_feedforward = 0.0f;
                 uint8_t was_holding;
                 uint8_t yaw_holding;
-                yaw_trajectory_step(&yaw_profile_target, &yaw_profile_speed,
-                                    &yaw_profile_acceleration, yaw_target,
-                                    YAW_TRAJECTORY_MAX_SPEED_RAD_S,
-                                    YAW_TRAJECTORY_MAX_ACCEL_RAD_S2,
-                                    control_dt_s);
-                yaw_velocity_feedforward = YAW_VELOCITY_FF_GAIN *
-                    yaw_profile_speed;
-                yaw_acceleration_feedforward = clampf(
-                    YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 *
-                    yaw_profile_acceleration,
-                    YAW_ACCELERATION_FF_CURRENT_LIMIT);
-                was_holding = yaw_hold_state.active;
-                yaw_holding = YawHold_Update(
-                    &yaw_hold_state, &yaw_hold_config,
-                    yaw_target, yaw_profile_target, yaw_profile_speed,
-                    yaw_angle_filtered,
-                    YAW_ENCODER_SIGN *
-                    can2_dm4310_id1.filtered_speed_rpm /
-                    YAW_ENCODER_TO_OUTPUT_RATIO);
-                if (yaw_holding != 0U)
+                if (yaw_target_initialized != 0U)
                 {
-                    /* Reset once on entry.  Repeating this every millisecond
-                     * creates a discontinuous brake/restart limit cycle. */
-                    if (was_holding == 0U)
+                    float yaw_feedback;
+                    float yaw_speed_target_rad_s;
+                    yaw_trajectory_step(&yaw_profile_target, &yaw_profile_speed,
+                                        &yaw_profile_acceleration, yaw_target,
+                                        YAW_TRAJECTORY_MAX_SPEED_RAD_S,
+                                        YAW_TRAJECTORY_MAX_ACCEL_RAD_S2,
+                                        control_dt_s);
+                    yaw_velocity_feedforward = YAW_VELOCITY_FF_GAIN *
+                        yaw_profile_speed;
+                    yaw_acceleration_feedforward = clampf(
+                        YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 *
+                        yaw_profile_acceleration,
+                        YAW_ACCELERATION_FF_CURRENT_LIMIT);
+                    was_holding = yaw_hold_state.active;
+                    yaw_holding = YawHold_Update(
+                        &yaw_hold_state, &yaw_hold_config,
+                        yaw_target, yaw_profile_target, yaw_profile_speed,
+                        yaw_angle_filtered,
+                        YAW_ENCODER_SIGN *
+                        can2_dm4310_id1.filtered_speed_rpm /
+                        YAW_ENCODER_TO_OUTPUT_RATIO);
+                    if (yaw_holding != 0U)
                     {
-                        reset_position_pid(&yaw_angle_pid);
-                        MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
+                        /* Reset once on entry.  Repeating this every
+                         * millisecond creates a discontinuous brake/restart
+                         * limit cycle. */
+                        if (was_holding == 0U)
+                        {
+                            reset_position_pid(&yaw_angle_pid);
+                            MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
+                        }
+                        yaw_feedback = 0.0f;
+                        yaw_velocity_feedforward = 0.0f;
+                        yaw_acceleration_feedforward = 0.0f;
                     }
-                    yaw_feedback = 0.0f;
-                    yaw_velocity_feedforward = 0.0f;
-                    yaw_acceleration_feedforward = 0.0f;
+                    else
+                    {
+                        if (was_holding != 0U)
+                            reset_position_pid(&yaw_angle_pid);
+                        yaw_feedback = position_pid(&yaw_angle_pid,
+                                                     yaw_profile_target,
+                                                     yaw_angle_filtered,
+                                                     control_dt_s);
+                    }
+                    yaw_speed_target_rad_s = clampf(yaw_feedback +
+                        yaw_velocity_feedforward, YAW_MAX_SPEED_RAD_S);
+                    DM4310_SetSpeed(&can2_dm4310_id1,
+                        YAW_MOTOR_COMMAND_SIGN * yaw_speed_target_rad_s *
+                        RAD_S_TO_RPM * YAW_ENCODER_TO_OUTPUT_RATIO);
+                    DM4310_SetCurrentFeedforward(&can2_dm4310_id1,
+                        (int16_t)(YAW_MOTOR_COMMAND_SIGN *
+                                  yaw_acceleration_feedforward));
                 }
-                else
+                if (pitch_target_initialized != 0U)
                 {
-                    if (was_holding != 0U)
-                        reset_position_pid(&yaw_angle_pid);
-                    yaw_feedback = position_pid(&yaw_angle_pid,
-                                                 yaw_profile_target,
-                                                 yaw_angle_filtered,
-                                                 control_dt_s);
+                    float pitch_speed_target = position_pid(
+                        &pitch_angle_pid, pitch_target, pitch_angle_actual,
+                        control_dt_s);
+                    gravity_feedforward = PITCH_GRAVITY_SIGN *
+                        PITCH_GRAVITY_FF_MAX_VOLTAGE *
+                        cosf(imu_pitch - PITCH_GRAVITY_ZERO_RAD);
+                    GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
+                        PITCH_MOTOR_SIGN * gravity_feedforward);
+                    GM6020_SetSpeed(&can1_gm6020_id2,
+                                   PITCH_MOTOR_SIGN * pitch_speed_target);
                 }
-                pitch_speed_target = position_pid(&pitch_angle_pid,
-                                                   pitch_target,
-                                                   pitch_angle_actual,
-                                                   control_dt_s);
-                gravity_feedforward = PITCH_GRAVITY_SIGN *
-                    PITCH_GRAVITY_FF_MAX_VOLTAGE *
-                    cosf(imu_pitch - PITCH_GRAVITY_ZERO_RAD);
-                GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
-                    PITCH_MOTOR_SIGN * gravity_feedforward);
-                GM6020_SetSpeed(&can1_gm6020_id2,
-                               PITCH_MOTOR_SIGN * pitch_speed_target);
-                yaw_speed_target_rad_s = clampf(yaw_feedback +
-                    yaw_velocity_feedforward, YAW_MAX_SPEED_RAD_S);
-                DM4310_SetSpeed(&can2_dm4310_id1,
-                                YAW_MOTOR_COMMAND_SIGN * yaw_speed_target_rad_s *
-                                RAD_S_TO_RPM *
-                                YAW_ENCODER_TO_OUTPUT_RATIO);
-                DM4310_SetCurrentFeedforward(&can2_dm4310_id1,
-                    (int16_t)(YAW_MOTOR_COMMAND_SIGN *
-                              yaw_acceleration_feedforward));
-                motor_status = CanMotorBus_Update(control_dt_s);
+                motor_status = CanMotorBus_UpdateSelected(
+                    control_dt_s, pitch_target_initialized,
+                    yaw_target_initialized);
                 if (motor_status == HAL_OK)
                 {
                     gimbal_control_state.active = 1U;
@@ -612,9 +653,11 @@ void PID_calc(void *argument)
                 }
                 else
                 {
-                    targets_initialized = 0U;
-                    encoder_initialized = 0U;
+                    pitch_target_initialized = 0U;
+                    yaw_target_initialized = 0U;
+                    pitch_encoder_initialized = 0U;
                     yaw_encoder_initialized = 0U;
+                    YawStartup_Reset(&yaw_startup_state);
                     gimbal_control_state.active = 0U;
                     gimbal_control_state.gravity_feedforward = 0.0f;
                 }
@@ -639,7 +682,10 @@ void PID_calc(void *argument)
             }
 
             CanMotorBus_GetStatus(&bus_status);
-            if (targets_initialized == 0U)
+            if (((pitch_control_permitted != 0U) &&
+                 (pitch_target_initialized == 0U)) ||
+                ((yaw_control_permitted != 0U) &&
+                 (yaw_target_initialized == 0U)))
                 control_inhibit_flags |= GIMBAL_INHIBIT_UNINITIALIZED;
             gimbal_control_state.feedback_healthy = feedback_healthy;
             gimbal_control_state.imu_fresh = imu_fresh;
@@ -685,16 +731,20 @@ void PID_calc(void *argument)
             gimbal_control_state.yaw_motor_speed_rpm =
                 can2_dm4310_id1.speed_rpm;
             gimbal_control_state.yaw_test_request_current = yaw_test_current;
-                gimbal_control_state.yaw_test_active = yaw_test_active;
-                gimbal_control_state.yaw_hold_active = yaw_hold_state.active;
+            gimbal_control_state.yaw_test_active = yaw_test_active;
+            gimbal_control_state.yaw_hold_active = yaw_hold_state.active;
             gimbal_control_state.remote_fresh = remote_fresh;
-            gimbal_control_state.targets_initialized = targets_initialized;
+            gimbal_control_state.targets_initialized = (uint8_t)(
+                (pitch_target_initialized != 0U) &&
+                (yaw_target_initialized != 0U));
             gimbal_control_state.yaw_trajectory_speed_rad_s =
                 yaw_profile_speed;
             gimbal_control_state.yaw_velocity_feedforward_rad_s =
-                (targets_initialized != 0U) ? yaw_velocity_feedforward : 0.0f;
+                (yaw_target_initialized != 0U) ?
+                yaw_velocity_feedforward : 0.0f;
             gimbal_control_state.yaw_acceleration_feedforward_current =
-                (targets_initialized != 0U) ? yaw_acceleration_feedforward : 0.0f;
+                (yaw_target_initialized != 0U) ?
+                yaw_acceleration_feedforward : 0.0f;
         }
 
         gimbal_control_state.pitch_target_rad = pitch_target;

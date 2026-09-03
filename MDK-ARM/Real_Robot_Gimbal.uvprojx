@@ -460,6 +460,11 @@
               <FilePath>../Tasks/Inc/yaw_hold.h</FilePath>
             </File>
             <File>
+              <FileName>yaw_startup.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../Tasks/Inc/yaw_startup.h</FilePath>
+            </File>
+            <File>
               <FileName>data_process.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Tasks/Src/data_process.c</FilePath>
@@ -478,6 +483,11 @@
               <FileName>yaw_hold.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Tasks/Src/yaw_hold.c</FilePath>
+            </File>
+            <File>
+              <FileName>yaw_startup.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Tasks/Src/yaw_startup.c</FilePath>
             </File>
             <File>
               <FileName>vofa.c</FileName>

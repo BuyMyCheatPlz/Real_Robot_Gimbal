@@ -41,6 +41,9 @@ extern DM4310_t can2_dm4310_id1;
 HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
                                    CAN_HandleTypeDef *can2);
 HAL_StatusTypeDef CanMotorBus_Update(float dt_s);
+HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
+                                             uint8_t pitch_enabled,
+                                             uint8_t yaw_enabled);
 HAL_StatusTypeDef CanMotorBus_SendYawTestCurrent(int16_t current);
 HAL_StatusTypeDef CanMotorBus_StopGimbal(float dt_s);
 HAL_StatusTypeDef CanMotorBus_StopAll(void);

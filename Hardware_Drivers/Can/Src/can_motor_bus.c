@@ -166,18 +166,28 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
     return status;
 }
 
-static void reset_gimbal_control(void)
+static void reset_pitch_control(void)
 {
     GM6020_SetVoltageFeedforward(&can1_gm6020_id2, 0.0f);
     GM6020_SetSpeed(&can1_gm6020_id2, 0.0f);
-    DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
-    DM4310_SetCurrentFeedforward(&can2_dm4310_id1, 0);
     MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
-    MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
     can1_gm6020_id2.filtered_speed_rpm =
         (float)can1_gm6020_id2.feedback.speed_rpm;
+}
+
+static void reset_yaw_control(void)
+{
+    DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
+    DM4310_SetCurrentFeedforward(&can2_dm4310_id1, 0);
+    MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
     can2_dm4310_id1.filtered_speed_rpm = 0.0f;
     can2_dm4310_id1.speed_filter_initialized = 0U;
+}
+
+static void reset_gimbal_control(void)
+{
+    reset_pitch_control();
+    reset_yaw_control();
 }
 
 static void reset_all_control(void)
@@ -327,6 +337,13 @@ void CanMotorBus_CheckOffline(uint32_t now_ms)
 
 HAL_StatusTypeDef CanMotorBus_Update(float dt_s)
 {
+    return CanMotorBus_UpdateSelected(dt_s, 1U, 1U);
+}
+
+HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
+                                             uint8_t pitch_enabled,
+                                             uint8_t yaw_enabled)
+{
     int16_t m3508_id2;
     int16_t m3508_id3;
     int16_t gm6020_id2;
@@ -338,9 +355,24 @@ HAL_StatusTypeDef CanMotorBus_Update(float dt_s)
 
     m3508_id2 = M3508_Update(&can1_m3508_id2, dt_s);
     m3508_id3 = M3508_Update(&can1_m3508_id3, dt_s);
-    gm6020_id2 = GM6020_Update(&can1_gm6020_id2, dt_s);
+    if (pitch_enabled != 0U)
+        gm6020_id2 = GM6020_Update(&can1_gm6020_id2, dt_s);
+    else
+    {
+        reset_pitch_control();
+        gm6020_id2 = 0;
+    }
     m2006_id5 = M2006_Update(&can2_m2006_id5, dt_s);
-    dm4310_id1 = DM4310_Update(&can2_dm4310_id1, dt_s);
+    if (yaw_enabled != 0U)
+        dm4310_id1 = DM4310_Update(&can2_dm4310_id1, dt_s);
+    else
+    {
+        /* Yaw startup deliberately bypasses its zero-speed PID.  A zero
+         * target passed through that PID can still create a large braking
+         * command from unsettled speed feedback. */
+        reset_yaw_control();
+        dm4310_id1 = 0;
+    }
     return guarded_send_commands(m3508_id2, m3508_id3, gm6020_id2,
                                  m2006_id5, dm4310_id1);
 }

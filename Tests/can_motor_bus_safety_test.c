@@ -145,6 +145,30 @@ int main(void)
     CanMotorBus_GetStatus(&status);
     assert(status.can2_tx_complete_count == 1U);
 
+    /* Yaw startup settling must not suppress an otherwise healthy Pitch
+     * loop.  The shared CAN publisher sends Pitch while forcing Yaw to an
+     * exact zero command instead of running its speed PID. */
+    can1_gm6020_id2.feedback.online = 1U;
+    can1_gm6020_id2.feedback.speed_rpm = 0;
+    MotorSpeedPid_Init(&can1_gm6020_id2.speed_pid,
+                       10.0f, 0.0f, 30000.0f, 30000.0f);
+    GM6020_SetSpeed(&can1_gm6020_id2, 10.0f);
+    can2_dm4310_id1.speed_rpm = 50.0f;
+    MotorSpeedPid_Init(&can2_dm4310_id1.speed_pid,
+                       2.0f, 0.0f, 1000.0f, 1000.0f);
+    DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
+    sent_count = 0U;
+    assert(CanMotorBus_UpdateSelected(0.001f, 1U, 0U) == HAL_OK);
+    frame = find_frame(0x1FFU);
+    assert(frame != 0);
+    assert((frame->data[2] == 0U) && (frame->data[3] == 100U));
+    frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
+    assert(frame != 0);
+    assert((frame->data[0] == 0U) && (frame->data[1] == 0U));
+    CanMotorBus_GetStatus(&status);
+    assert((status.last_gm6020_id2_command == 100) &&
+           (status.last_dm4310_id1_command == 0));
+
     /* CAN1 uses the same non-destructive back-pressure policy for both
      * 0x200 (C620) and 0x1FF (GM6020) command frames. */
     can1_free_level = 0U;

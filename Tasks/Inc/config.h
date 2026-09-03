@@ -63,6 +63,12 @@
 #define YAW_HOLD_ENTER_SPEED_RPM            0.20f
 #define YAW_PROFILE_SETTLED_POSITION_RAD   (0.01f * TASK_DEG_TO_RAD)
 #define YAW_PROFILE_SETTLED_SPEED_RAD_S     0.005f
+/* Keep yaw de-energized until fresh motor feedback proves that the output
+ * axis is stationary.  Capture the hold target only after this window. */
+#define YAW_STARTUP_SETTLE_TIME_MS          200U
+#define YAW_STARTUP_MAX_FEEDBACK_AGE_MS      10U
+#define YAW_STARTUP_MAX_SPEED_RPM             0.50f
+#define YAW_STARTUP_MAX_POSITION_DRIFT_RAD   (0.20f * TASK_DEG_TO_RAD)
 /* 0: capture and hold the current yaw when control is authorized (safe
  * commissioning default).  1: automatically move to IMU yaw zero. */
 /* Keep the present encoder position during first closed-loop commissioning.
