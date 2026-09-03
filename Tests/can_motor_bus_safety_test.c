@@ -140,7 +140,7 @@ int main(void)
     assert((frame->data[0] == 0U) && (frame->data[7] == 0U));
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
     assert(frame != 0);
-    assert((frame->data[0] == 0U) && (frame->data[1] == 3U));
+    assert((frame->data[0] == 3U) && (frame->data[1] == 0U));
     HAL_CAN_TxMailbox0CompleteCallback(&can2);
     CanMotorBus_GetStatus(&status);
     assert(status.can2_tx_complete_count == 1U);

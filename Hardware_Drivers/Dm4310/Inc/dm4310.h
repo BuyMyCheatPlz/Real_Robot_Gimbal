@@ -10,9 +10,8 @@
 #define DM4310_CURRENT_CONTROL_ID_5_TO_8     0x4FEU
 #define DM4310_FEEDBACK_BASE_ID              0x300U
 #define DM4310_ENCODER_COUNTS                8192U
-/* The wire field is signed 16-bit, but the current-control firmware fitted to
- * this gimbal develops substantial torque from a command near 3.  Enforce the
- * same safe ceiling below the task layer as a final guard. */
+/* Keep a conservative ceiling for the first hardware verification after the
+ * command-byte-order fix.  Re-tune only after confirming the real scale. */
 #define DM4310_CURRENT_COMMAND_LIMIT             3.0f
 #define DM4310_SPEED_FEEDBACK_SCALE          100.0f
 

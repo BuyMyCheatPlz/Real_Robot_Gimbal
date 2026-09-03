@@ -140,7 +140,10 @@ uint8_t DM4310_PackCurrentCommand(const DM4310_t *motor, int16_t current,
         slot = (uint8_t)(motor->id - 5U);
     }
     encoded = (uint16_t)clamp_current(current);
-    data[slot * 2U] = (uint8_t)(encoded >> 8);
-    data[slot * 2U + 1U] = (uint8_t)encoded;
+    /* DM4310 current commands are the exception on this bus: each signed
+     * 16-bit slot is little-endian (low byte first).  DJI command slots stay
+     * big-endian in their own drivers. */
+    data[slot * 2U] = (uint8_t)encoded;
+    data[slot * 2U + 1U] = (uint8_t)(encoded >> 8);
     return 1U;
 }

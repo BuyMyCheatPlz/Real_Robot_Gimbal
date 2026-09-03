@@ -35,16 +35,16 @@ int main(void)
     assert(DM4310_PackCurrentCommand(&motor, 0x1234, &std_id,
                                      command) != 0U);
     assert(std_id == DM4310_CURRENT_CONTROL_ID_1_TO_4);
-    assert((command[0] == 0x00U) && (command[1] == 0x03U));
+    assert((command[0] == 0x03U) && (command[1] == 0x00U));
     assert((command[2] == 0xAAU) && (command[7] == 0xAAU));
 
     memset(command, 0, sizeof(command));
     assert(DM4310_PackCurrentCommand(&motor, 20000, &std_id,
                                      command) != 0U);
-    assert((command[0] == 0x00U) && (command[1] == 0x03U));
+    assert((command[0] == 0x03U) && (command[1] == 0x00U));
     assert(DM4310_PackCurrentCommand(&motor, -20000, &std_id,
                                      command) != 0U);
-    assert((command[0] == 0xFFU) && (command[1] == 0xFDU));
+    assert((command[0] == 0xFDU) && (command[1] == 0xFFU));
 
     DM4310_Init(&motor_id5, 5U, 0.0f, 0.0f);
     memset(command, 0, sizeof(command));
@@ -66,9 +66,9 @@ int main(void)
         for (byte_index = 0U; byte_index < sizeof(command); ++byte_index)
         {
             if (byte_index == (uint8_t)(slot * 2U))
-                assert(command[byte_index] == 0x00U);
-            else if (byte_index == (uint8_t)(slot * 2U + 1U))
                 assert(command[byte_index] == 0x03U);
+            else if (byte_index == (uint8_t)(slot * 2U + 1U))
+                assert(command[byte_index] == 0x00U);
             else
                 assert(command[byte_index] == 0U);
         }
