@@ -35,6 +35,8 @@ void MotorSpeedPid_SetGains(MotorSpeedPid_t *pid, float kp, float ki,
  * keeps the legacy behaviour (no error-based separation). */
 void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
                                          float error_limit);
+float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
+                                   float measured_rpm, float dt_s);
 int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
                                 float measured_rpm, float dt_s);
 void DjiMotor_DecodeFeedback(DjiMotorFeedback_t *feedback,

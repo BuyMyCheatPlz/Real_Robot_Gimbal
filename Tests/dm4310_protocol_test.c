@@ -27,22 +27,24 @@ int main(void)
     uint8_t id;
     uint8_t byte_index;
     uint8_t slot;
+    int32_t accumulated_command = 0;
+    uint16_t sample;
 
     DM4310_Init(&motor, 1U, 100.0f, 0.0f);
     memset(command, 0xAA, sizeof(command));
     assert(DM4310_PackCurrentCommand(&motor, 0x1234, &std_id,
                                      command) != 0U);
     assert(std_id == DM4310_CURRENT_CONTROL_ID_1_TO_4);
-    assert((command[0] == 0x12U) && (command[1] == 0x34U));
+    assert((command[0] == 0x00U) && (command[1] == 0x03U));
     assert((command[2] == 0xAAU) && (command[7] == 0xAAU));
 
     memset(command, 0, sizeof(command));
     assert(DM4310_PackCurrentCommand(&motor, 20000, &std_id,
                                      command) != 0U);
-    assert((command[0] == 0x40U) && (command[1] == 0x00U));
+    assert((command[0] == 0x00U) && (command[1] == 0x03U));
     assert(DM4310_PackCurrentCommand(&motor, -20000, &std_id,
                                      command) != 0U);
-    assert((command[0] == 0xC0U) && (command[1] == 0x00U));
+    assert((command[0] == 0xFFU) && (command[1] == 0xFDU));
 
     DM4310_Init(&motor_id5, 5U, 0.0f, 0.0f);
     memset(command, 0, sizeof(command));
@@ -55,8 +57,7 @@ int main(void)
     {
         DM4310_Init(&slot_motor, id, 0.0f, 0.0f);
         memset(command, 0, sizeof(command));
-        assert(DM4310_PackCurrentCommand(&slot_motor,
-                                         (int16_t)(0x0100 + id),
+        assert(DM4310_PackCurrentCommand(&slot_motor, 3,
                                          &std_id, command) != 0U);
         assert(std_id == ((id <= 4U) ?
                DM4310_CURRENT_CONTROL_ID_1_TO_4 :
@@ -65,9 +66,9 @@ int main(void)
         for (byte_index = 0U; byte_index < sizeof(command); ++byte_index)
         {
             if (byte_index == (uint8_t)(slot * 2U))
-                assert(command[byte_index] == 0x01U);
+                assert(command[byte_index] == 0x00U);
             else if (byte_index == (uint8_t)(slot * 2U + 1U))
-                assert(command[byte_index] == id);
+                assert(command[byte_index] == 0x03U);
             else
                 assert(command[byte_index] == 0U);
         }
@@ -84,14 +85,28 @@ int main(void)
     assert((motor.online != 0U) && (motor.last_update_ms == 1234U));
 
     DM4310_SetSpeed(&motor, 1000.0f);
-    assert(DM4310_Update(&motor, 0.001f) == 16384);
+    assert(DM4310_Update(&motor, 0.001f) == 3);
 
     DM4310_Init(&motor, 1U, 0.0f, 0.0f);
     DM4310_Decode(&motor, feedback, 1234U);
     DM4310_SetCurrentFeedforward(&motor, 1000);
-    assert(DM4310_Update(&motor, 0.001f) == 1000);
+    assert(DM4310_Update(&motor, 0.001f) == 3);
     DM4310_SetCurrentFeedforward(&motor, 20000);
-    assert(DM4310_Update(&motor, 0.001f) == 16384);
+    assert(DM4310_Update(&motor, 0.001f) == 3);
+
+    /* Low-torque PID and feedforward values must survive the integer wire
+     * format as a bounded pulse-density average instead of truncating to
+     * zero and creating a large position dead zone. */
+    DM4310_Init(&motor, 1U, 0.0f, 0.0f);
+    motor.online = 1U;
+    DM4310_SetCurrentFeedforward(&motor, 0.25f);
+    for (sample = 0U; sample < 400U; ++sample)
+    {
+        int16_t command_value = DM4310_Update(&motor, 0.001f);
+        assert((command_value >= 0) && (command_value <= 1));
+        accumulated_command += command_value;
+    }
+    assert(accumulated_command == 100);
 
     DM4310_Init(&invalid_motor, 0U, 0.0f, 0.0f);
     memset(command, 0x5A, sizeof(command));

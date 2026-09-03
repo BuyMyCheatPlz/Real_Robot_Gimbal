@@ -606,6 +606,7 @@ void PID_calc(void *argument)
                         {
                             reset_position_pid(&yaw_angle_pid);
                             MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
+                            can2_dm4310_id1.current_quantization_error = 0.0f;
                         }
                         yaw_feedback = 0.0f;
                         yaw_velocity_feedforward = 0.0f;
@@ -626,8 +627,8 @@ void PID_calc(void *argument)
                         YAW_MOTOR_COMMAND_SIGN * yaw_speed_target_rad_s *
                         RAD_S_TO_RPM * YAW_ENCODER_TO_OUTPUT_RATIO);
                     DM4310_SetCurrentFeedforward(&can2_dm4310_id1,
-                        (int16_t)(YAW_MOTOR_COMMAND_SIGN *
-                                  yaw_acceleration_feedforward));
+                        YAW_MOTOR_COMMAND_SIGN *
+                        yaw_acceleration_feedforward);
                 }
                 if (pitch_target_initialized != 0U)
                 {

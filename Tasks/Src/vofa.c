@@ -172,6 +172,10 @@ void VOFA_print(void *argument)
          * incoming motor feedback is present. */
         channels[10] = (float)(snapshot.can2_tx_complete_count % 1000000U);
         channels[11] = (float)snapshot.control_inhibit_flags;
+        channels[12] = snapshot.pitch_target_rad * 57.295779513082320876f;
+        channels[13] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
+        channels[14] = snapshot.pitch_speed_rpm;
+        channels[15] = (float)snapshot.pitch_can_command;
         /* Emit only while a yaw command is being transmitted: bounded
          * direction test or enabled closed-loop control.  UART RX remains
          * active while idle. */

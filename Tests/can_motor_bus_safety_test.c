@@ -140,10 +140,11 @@ int main(void)
     assert((frame->data[0] == 0U) && (frame->data[7] == 0U));
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
     assert(frame != 0);
-    assert((frame->data[0] == 0U) && (frame->data[1] == 100U));
+    assert((frame->data[0] == 0U) && (frame->data[1] == 3U));
     HAL_CAN_TxMailbox0CompleteCallback(&can2);
     CanMotorBus_GetStatus(&status);
     assert(status.can2_tx_complete_count == 1U);
+    assert(status.last_dm4310_id1_command == 3);
 
     /* Yaw startup settling must not suppress an otherwise healthy Pitch
      * loop.  The shared CAN publisher sends Pitch while forcing Yaw to an

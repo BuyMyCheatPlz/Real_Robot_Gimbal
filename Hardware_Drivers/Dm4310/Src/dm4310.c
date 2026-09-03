@@ -34,7 +34,7 @@ void DM4310_SetSpeed(DM4310_t *motor, float speed_rpm)
     if (motor != 0) motor->target_speed_rpm = speed_rpm;
 }
 
-void DM4310_SetCurrentFeedforward(DM4310_t *motor, int16_t current)
+void DM4310_SetCurrentFeedforward(DM4310_t *motor, float current)
 {
     if (motor != 0) motor->current_feedforward = current;
 }
@@ -70,8 +70,10 @@ void DM4310_Decode(DM4310_t *motor, const uint8_t data[8], uint32_t now_ms)
 
 int16_t DM4310_Update(DM4310_t *motor, float dt_s)
 {
-    int32_t output;
-    int32_t output_limit;
+    float output;
+    float output_limit;
+    float quantized_input;
+    int16_t command;
     if ((motor == 0) || (dt_s <= 0.0f)) return 0;
     if ((motor->online == 0U) ||
         (motor->id < DM4310_MOTOR_ID_MIN) ||
@@ -79,6 +81,7 @@ int16_t DM4310_Update(DM4310_t *motor, float dt_s)
     {
         MotorSpeedPid_Reset(&motor->speed_pid);
         motor->speed_filter_initialized = 0U;
+        motor->current_quantization_error = 0.0f;
         return 0;
     }
     if (motor->speed_filter_initialized == 0U)
@@ -91,18 +94,29 @@ int16_t DM4310_Update(DM4310_t *motor, float dt_s)
         motor->filtered_speed_rpm += motor->speed_filter_alpha *
             (motor->speed_rpm - motor->filtered_speed_rpm);
     }
-    output = (int32_t)MotorSpeedPid_Calculate(&motor->speed_pid,
-                                               motor->target_speed_rpm,
-                                               motor->filtered_speed_rpm,
-                                               dt_s) +
-             (int32_t)motor->current_feedforward;
-    output_limit = (int32_t)motor->speed_pid.output_limit;
-    if (output_limit > (int32_t)DM4310_CURRENT_COMMAND_LIMIT)
-        output_limit = (int32_t)DM4310_CURRENT_COMMAND_LIMIT;
-    if (output_limit < 0) output_limit = 0;
+    output = MotorSpeedPid_CalculateFloat(&motor->speed_pid,
+                                           motor->target_speed_rpm,
+                                           motor->filtered_speed_rpm,
+                                           dt_s) +
+             motor->current_feedforward;
+    output_limit = motor->speed_pid.output_limit;
+    if (output_limit > DM4310_CURRENT_COMMAND_LIMIT)
+        output_limit = DM4310_CURRENT_COMMAND_LIMIT;
+    if (output_limit < 0.0f) output_limit = 0.0f;
     if (output > output_limit) output = output_limit;
     if (output < -output_limit) output = -output_limit;
-    return (int16_t)output;
+
+    /* Error diffusion preserves sub-count PID/feedforward effort across
+     * frames.  This avoids a large dead zone while every individual current
+     * command remains inside the hard safety limit. */
+    quantized_input = output + motor->current_quantization_error;
+    if (quantized_input > output_limit) quantized_input = output_limit;
+    if (quantized_input < -output_limit) quantized_input = -output_limit;
+    command = (quantized_input >= 0.0f) ?
+        (int16_t)(quantized_input + 0.5f) :
+        (int16_t)(quantized_input - 0.5f);
+    motor->current_quantization_error = quantized_input - (float)command;
+    return command;
 }
 
 uint8_t DM4310_PackCurrentCommand(const DM4310_t *motor, int16_t current,

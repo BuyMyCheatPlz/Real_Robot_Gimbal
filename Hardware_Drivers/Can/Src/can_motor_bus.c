@@ -180,6 +180,7 @@ static void reset_yaw_control(void)
     DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
     DM4310_SetCurrentFeedforward(&can2_dm4310_id1, 0);
     MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
+    can2_dm4310_id1.current_quantization_error = 0.0f;
     can2_dm4310_id1.filtered_speed_rpm = 0.0f;
     can2_dm4310_id1.speed_filter_initialized = 0U;
 }
@@ -381,6 +382,10 @@ HAL_StatusTypeDef CanMotorBus_SendYawTestCurrent(int16_t current)
 {
     CanMotorBus_CheckOffline(HAL_GetTick());
     if (can2_dm4310_id1.online == 0U) return HAL_ERROR;
+    if (current > (int16_t)DM4310_CURRENT_COMMAND_LIMIT)
+        current = (int16_t)DM4310_CURRENT_COMMAND_LIMIT;
+    if (current < (int16_t)-DM4310_CURRENT_COMMAND_LIMIT)
+        current = (int16_t)-DM4310_CURRENT_COMMAND_LIMIT;
     return guarded_send_commands(0, 0, 0, 0, current);
 }
 

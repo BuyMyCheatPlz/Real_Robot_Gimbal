@@ -83,20 +83,20 @@
 /* Motor encoder radians divided by this ratio equals output-axis radians.
  * Keep 1.0 only for direct drive; set the actual reduction ratio otherwise. */
 #define YAW_ENCODER_TO_OUTPUT_RATIO           1.0f
-#define YAW_DIRECTION_TEST_MAX_CURRENT         20
+#define YAW_DIRECTION_TEST_MAX_CURRENT          3
 #define YAW_DIRECTION_TEST_DURATION_MS         200U
 
 /* ---------------- Pitch：GM6020 外位置环 + 内速度环 ---------------- */
-#define PITCH_ANGLE_KP_RPM_PER_RAD        20.0f
+#define PITCH_ANGLE_KP_RPM_PER_RAD        90.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
 #define PITCH_ANGLE_KD_RPM_S_PER_RAD      2.0f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
-#define PITCH_MAX_SPEED_RPM                30.0f
-#define PITCH_SPEED_KP                    10.0f
-#define PITCH_SPEED_KI                     0.0f
+#define PITCH_MAX_SPEED_RPM               120.0f
+#define PITCH_SPEED_KP                    80.0f
+#define PITCH_SPEED_KI                     8.0f
 #define PITCH_SPEED_KD                    0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT        30000.0f
-#define PITCH_SPEED_OUTPUT_LIMIT           3000.0f
+#define PITCH_SPEED_OUTPUT_LIMIT          10000.0f
 #define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 80.0f
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
 #define PITCH_GRAVITY_FF_MAX_VOLTAGE         0.0f
@@ -106,30 +106,31 @@
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ---------------- */
-#define YAW_ANGLE_KP_RAD_S_PER_RAD        0.50f
-#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.0f
+#define YAW_ANGLE_KP_RAD_S_PER_RAD        0.35f
+#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.02f
 #define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.0f
-#define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    1.0f
-#define YAW_MAX_SPEED_RAD_S               0.15f
+#define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    0.04f
+#define YAW_MAX_SPEED_RAD_S               0.10f
 /* Yaw reference trajectory.  The profile is output-axis radians. */
-#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    0.15f
-#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   0.50f
+#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    0.08f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   0.20f
 /* 0 disables velocity feedforward; 1 applies the planned speed directly. */
-#define YAW_VELOCITY_FF_GAIN              0.0f
-/* Directly tunable torque feedforward: CAN current-command counts per
- * output-axis rad/s^2.  Keep zero until the PID loops are stable.  Positive
+#define YAW_VELOCITY_FF_GAIN              0.60f
+/* Directly tunable torque feedforward: CAN current-command units per
+ * output-axis rad/s^2.  Keep it small until the PID loops are stable.  Positive
  * means positive output-axis acceleration; YAW_MOTOR_COMMAND_SIGN is applied by the
  * controller. */
-#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 0.0f
-#define YAW_ACCELERATION_FF_CURRENT_LIMIT 800.0f
-#define YAW_SPEED_KP_CURRENT_PER_RPM        2.0f
-#define YAW_SPEED_KI_CURRENT_PER_RPM_S      0.0f
+#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 0.50f
+#define YAW_ACCELERATION_FF_CURRENT_LIMIT    0.20f
+#define YAW_SPEED_KP_CURRENT_PER_RPM        1.0f
+#define YAW_SPEED_KI_CURRENT_PER_RPM_S      0.5f
 #define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
-#define YAW_SPEED_INTEGRAL_LIMIT_CURRENT 1500.0f
-/* Commissioning limit: raise only after confirming the motor direction and
- * CAN command path.  ±16384 is the motor's rated full-scale command. */
-#define YAW_CURRENT_OUTPUT_LIMIT            20.0f
-#define YAW_SPEED_INTEGRAL_SEPARATION_RPM 30.0f
+#define YAW_SPEED_INTEGRAL_LIMIT_CURRENT    1.0f
+/* Captured hardware data showed that a command magnitude of 20 drove the
+ * output to about 71 rpm and excited a large reversing oscillation.  Keep
+ * closed-loop and direction-test commands at the proven low-torque limit. */
+#define YAW_CURRENT_OUTPUT_LIMIT             3.0f
+#define YAW_SPEED_INTEGRAL_SEPARATION_RPM  5.0f
 #define YAW_ANGLE_INTEGRAL_SEPARATION_RAD (20.0f * TASK_DEG_TO_RAD)
 /* Bench tests: +current increases encoder count, raw speed, encoder angle,
  * and IMU yaw; -current decreases all four.  Command and encoder signs are

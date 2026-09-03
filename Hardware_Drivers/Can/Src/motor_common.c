@@ -48,8 +48,8 @@ void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
         error_limit : 0.0f;
 }
 
-int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
-                                float measured_rpm, float dt_s)
+float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
+                                   float measured_rpm, float dt_s)
 {
     float error;
     float output;
@@ -57,7 +57,7 @@ int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
     float proportional_derivative;
     float candidate_integral;
     uint8_t integrate;
-    if ((pid == 0) || (dt_s <= 0.0f)) return 0;
+    if ((pid == 0) || (dt_s <= 0.0f)) return 0.0f;
 
     error = target_rpm - measured_rpm;
     if (pid->initialized != 0U)
@@ -83,7 +83,14 @@ int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
     }
     output = proportional_derivative + pid->integral;
     output = clampf(output, pid->output_limit);
-    return (int16_t)output;
+    return output;
+}
+
+int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
+                                float measured_rpm, float dt_s)
+{
+    return (int16_t)MotorSpeedPid_CalculateFloat(pid, target_rpm,
+                                                  measured_rpm, dt_s);
 }
 
 void DjiMotor_DecodeFeedback(DjiMotorFeedback_t *feedback,

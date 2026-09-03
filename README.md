@@ -146,7 +146,7 @@ Real_Robot_Gimbal/
 | `Data_Process` | 1 ms | BMI088 姿态解算、D-BUS 处理、在线命令解析、队列发布 |
 | `PID_calc` | 1 ms | Pitch/Yaw 闭环、反馈新鲜度、CAN故障仲裁和超期保护 |
 | `Launch_Task` | 最长等待 2 ms | 两颗 M3508 和 M2006 的独立速度 PID 与在线保护 |
-| `VOFA_print` | 10 ms | UART4 DMA 发送四通道 JustFloat |
+| `VOFA_print` | 10 ms | UART4 DMA 发送 16 通道 JustFloat |
 | `defaultTask` | 1 ms 延时 | CubeMX 默认空闲任务 |
 
 任务间使用以下 RTOS 对象：
@@ -194,11 +194,12 @@ BMI088 的安装轴、轴符号和滤波权重均可在 `Tasks/Inc/config.h` 中
   扭矩电流 mA、绕组温度和 PCB 温度。
 - 编码器跨零展开为连续位置实际值并进行低通滤波。
 - 外层位置 PID 叠加斜坡目标生成的速度前馈。
-- MCU 内层速度 PID 生成 `-16384`～`16384` 电流控制量；ID 1～4 使用
+- MCU 内层速度 PID 生成电流控制量；当前实车安全限制为 `-3`～`3`，ID 1～4 使用
   `0x3FE`，ID 5～8 使用 `0x4FE`。
 - 上电第一帧编码器位置作为初始保持目标，不会强制回协议零位。
-- 使用最大速度、速度环积分、电流输出和角度软限位保护。默认电流输出限制为
-  3000，约为协议满量程的 18%，确认方向和铭牌最大电流后再调整。
+- 使用最大速度、速度环积分、电流输出和角度软限位保护。实测命令 20 已导致
+  约 71 rpm 的剧烈振荡，因此驱动层和任务层均硬限制为 `-3`～`3`；确认该版
+  电流固件的厂家缩放说明前不得放宽。
 
 DM4310 反馈频率由固件固定为 1000 Hz；更换电机固件后必须重新确认协议。
 
@@ -247,28 +248,26 @@ M2006 只有在线时才会运行。Launch 任务还会独立检查 100 ms 遥�
 
 ## 九、VOFA JustFloat 与在线调参
 
-UART4 每 20 ms 发送 3 个小端 float，随后发送帧尾 `00 00 80 7F`：
-
-| VOFA 通道 | 设备 |
-|---|---|
-| 1 | BMI088 Roll 解算角度，单位为度 |
-| 2 | BMI088 Pitch 解算角度，单位为度 |
-| 3 | BMI088 Yaw 解算角度，单位为度 |
+UART4 每 10 ms 发送 16 个小端 float，随后发送帧尾 `00 00 80 7F`。前 12 个
+通道保留 Yaw 闭环和安全诊断，新增通道 13～16 分别输出 Pitch 目标角、实际角、
+速度和实际 CAN 电压命令；完整映射见 [Tasks/README.md](Tasks/README.md)。
 
 UART4 同时接收以回车或换行结尾的 ASCII 命令：
 
 ```text
-KP_POS=2
-KI_POS=0
-KD_POS=0
-KP_SPD=80
-KI_SPD=8
-KD_SPD=0
+PITCH_KP_POS=90
+PITCH_KI_POS=0
+PITCH_KD_POS=2
+PITCH_KP_SPD=80
+PITCH_KI_SPD=8
+PITCH_KD_SPD=0
+YAW_KP_POS=0.35
+YAW_KP_SPD=1
 ```
 
 `Data_Process` 校验命令后通过 `Update_PID_para` 队列下发，`PID_calc` 在下一个
-控制周期更新运行时 PID。`POS` 参数更新两个云台外位置环，`SPD` 参数更新
-GM6020 软件速度环。`config.h` 中的宏仍是下次复位后的初始值。
+控制周期更新运行时 PID。命令必须包含 `PITCH_` 或 `YAW_` 轴名，避免误改另一轴；
+`config.h` 中的宏仍是下次复位后的初始值。
 
 ## 十、集中参数配置
 
