@@ -68,8 +68,8 @@ HAL_StatusTypeDef VOFA_SendControlFrame(
 {
     if ((vofa_uart == 0) || (channels == 0) || (tx_busy != 0U))
         return HAL_BUSY;
-    /* Function parameters declared as arrays are pointers here.  Never use
-     * sizeof(channels): it would copy only one float on this target. */
+    /* 数组形参在此处实际是指针。禁止使用 sizeof(channels)，否则在当前目标上
+     * 只会复制一个 float。 */
     memcpy(tx_buffer, channels, VOFA_PAYLOAD_LENGTH);
     tx_buffer[VOFA_PAYLOAD_LENGTH] = 0x00U;
     tx_buffer[VOFA_PAYLOAD_LENGTH + 1U] = 0x00U;
@@ -153,9 +153,8 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        /* Closed-loop diagnostic map: target/actual position are deliberately
-         * both present so a small command can be attributed to position error
-         * or to speed-feedback noise. */
+        /* 闭环诊断通道同时保留目标和实际位置，便于将小命令归因于位置误差或
+         * 速度反馈噪声。 */
         channels[0] = snapshot.yaw_target_rad * 57.295779513082320876f;
         channels[1] = (float)snapshot.yaw_can_command;
         channels[2] = (float)snapshot.yaw_encoder_count;
@@ -165,20 +164,18 @@ void VOFA_print(void *argument)
         channels[6] = snapshot.yaw_imu_actual_rad * 57.295779513082320876f;
         channels[7] = (float)snapshot.yaw_hold_active;
         channels[8] = (float)(snapshot.dm4310_feedback_count % 1000000U);
-        /* Fixed signature for the target/actual diagnostic map. */
+        /* 目标/实际诊断通道的固定签名。 */
         channels[9] = 4313.0f;
-        /* This must increase during YAWTEST.  It is the proof that CAN2
-         * accepted and completed outgoing command frames, not merely that
-         * incoming motor feedback is present. */
+        /* YAWTEST 期间该值必须递增，用于证明 CAN2 已接受并完成发送命令帧，而不只是
+         * 收到了电机反馈。 */
         channels[10] = (float)(snapshot.can2_tx_complete_count % 1000000U);
         channels[11] = (float)snapshot.control_inhibit_flags;
         channels[12] = snapshot.pitch_target_rad * 57.295779513082320876f;
         channels[13] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
         channels[14] = snapshot.pitch_speed_rpm;
         channels[15] = (float)snapshot.pitch_can_command;
-        /* Emit only while a yaw command is being transmitted: bounded
-         * direction test or enabled closed-loop control.  UART RX remains
-         * active while idle. */
+        /* 仅在发送 Yaw 命令时输出，包括有界方向测试或启用的闭环控制；空闲时仍保持
+         * UART 接收有效。 */
         if ((snapshot.yaw_test_active != 0U) || (snapshot.active != 0U))
         {
             (void)VOFA_SendControlFrame(channels);

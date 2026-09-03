@@ -34,7 +34,7 @@ int main(void)
         assert(fabsf(update.value - (float)(index + 1U)) < 0.0001f);
     }
 
-    /* Ambiguous legacy commands are rejected instead of changing both axes. */
+    /* 拒绝含义不明确的旧命令，避免同时修改两个轴。 */
     assert(PidParameter_Parse("KP_POS=1", &update) == 0U);
     assert(PidParameter_Parse("KP_SPD=1", &update) == 0U);
     assert(PidParameter_Parse("YAW_KP_SPD=-1", &update) == 0U);

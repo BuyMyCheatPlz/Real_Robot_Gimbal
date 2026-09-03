@@ -40,6 +40,7 @@ real_robot_gimbal\hardware_drivers.o: ../Core/Inc/usart.h
 real_robot_gimbal\hardware_drivers.o: ../Hardware_Drivers/Can/Inc/can_motor_bus.h
 real_robot_gimbal\hardware_drivers.o: ../Hardware_Drivers/m3508+c620/Inc/m3508.h
 real_robot_gimbal\hardware_drivers.o: ../Hardware_Drivers/Can/Inc/motor_common.h
+real_robot_gimbal\hardware_drivers.o: ../Tasks/Inc/config.h
 real_robot_gimbal\hardware_drivers.o: ../Hardware_Drivers/m2006+c610/Inc/m2006.h
 real_robot_gimbal\hardware_drivers.o: ../Hardware_Drivers/Gm6020/Inc/gm6020.h
 real_robot_gimbal\hardware_drivers.o: ../Hardware_Drivers/Dm4310/Inc/dm4310.h

@@ -129,8 +129,7 @@ static float signf(float value)
     return 0.0f;
 }
 
-/* A finite-acceleration trajectory exposes both velocity and acceleration
- * references without differentiating a discontinuous position step. */
+/* 有限加速度轨迹同时提供速度和加速度参考，避免对不连续的位置阶跃求导。 */
 static void yaw_trajectory_step(float *position, float *speed,
                                 float *acceleration, float target,
                                 float max_speed, float max_acceleration,
@@ -339,8 +338,8 @@ void PID_calc(void *argument)
                 }
                 else
                 {
-                    /* Filter the shortest angular difference so an IMU yaw
-                     * wrap at +/-pi cannot look like a 360-degree jump. */
+                    /* 对最短角度差进行滤波，避免 IMU Yaw 在 +/-pi 处跨界时被误认为
+                     * 发生 360° 跳变。 */
                     yaw_imu_filtered = normalize_yaw_rad(yaw_imu_filtered +
                         YAW_IMU_POSITION_LPF_ALPHA *
                         yaw_angle_difference(imu_yaw, yaw_imu_filtered));
@@ -527,10 +526,8 @@ void PID_calc(void *argument)
                      YAW_ENCODER_SIGN * can2_dm4310_id1.speed_rpm /
                      YAW_ENCODER_TO_OUTPUT_RATIO) != 0U))
             {
-                /* Encoder is the closed-loop measurement.  To return the
-                 * output axis to the IMU's relative yaw zero, transform that
-                 * IMU error into the encoder reference frame.  The two signs
-                 * were validated by the +/− current tests. */
+                /* 编码器是闭环测量值。若要让输出轴回到 IMU 相对 Yaw 零点，需将 IMU
+                 * 误差转换到编码器参考系。两个符号已通过正负电流测试确认。 */
                 if (YAW_HOME_TO_IMU_ZERO_ON_AUTHORIZE != 0U)
                     yaw_home = yaw_angle_filtered - yaw_imu_filtered;
                 else
@@ -599,9 +596,8 @@ void PID_calc(void *argument)
                         YAW_ENCODER_TO_OUTPUT_RATIO);
                     if (yaw_holding != 0U)
                     {
-                        /* Reset once on entry.  Repeating this every
-                         * millisecond creates a discontinuous brake/restart
-                         * limit cycle. */
+                        /* 进入保持状态时只重置一次。每毫秒重复重置会造成不连续的
+                         * 刹车/重启极限环。 */
                         if (was_holding == 0U)
                         {
                             reset_position_pid(&yaw_angle_pid);

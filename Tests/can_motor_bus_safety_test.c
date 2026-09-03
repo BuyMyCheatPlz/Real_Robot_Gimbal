@@ -140,15 +140,14 @@ int main(void)
     assert((frame->data[0] == 0U) && (frame->data[7] == 0U));
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
     assert(frame != 0);
-    assert((frame->data[0] == 3U) && (frame->data[1] == 0U));
+    assert((frame->data[0] == 20U) && (frame->data[1] == 0U));
     HAL_CAN_TxMailbox0CompleteCallback(&can2);
     CanMotorBus_GetStatus(&status);
     assert(status.can2_tx_complete_count == 1U);
-    assert(status.last_dm4310_id1_command == 3);
+    assert(status.last_dm4310_id1_command == 20);
 
-    /* Yaw startup settling must not suppress an otherwise healthy Pitch
-     * loop.  The shared CAN publisher sends Pitch while forcing Yaw to an
-     * exact zero command instead of running its speed PID. */
+    /* Yaw 启动稳定过程不能抑制健康的 Pitch 回路。共享 CAN 发布器会发送 Pitch，
+     * 同时强制 Yaw 使用精确的零命令，而不是运行其速度 PID。 */
     can1_gm6020_id2.feedback.online = 1U;
     can1_gm6020_id2.feedback.speed_rpm = 0;
     MotorSpeedPid_Init(&can1_gm6020_id2.speed_pid,
@@ -170,8 +169,7 @@ int main(void)
     assert((status.last_gm6020_id2_command == 100) &&
            (status.last_dm4310_id1_command == 0));
 
-    /* CAN1 uses the same non-destructive back-pressure policy for both
-     * 0x200 (C620) and 0x1FF (GM6020) command frames. */
+    /* CAN1 对 0x200（C620）和 0x1FF（GM6020）命令帧使用相同的非破坏性反压策略。 */
     can1_free_level = 0U;
     assert(CanMotorBus_SendYawTestCurrent(100) == HAL_OK);
     CanMotorBus_GetStatus(&status);
@@ -180,8 +178,7 @@ int main(void)
            (CanMotorBus_TxHealthy() != 0U));
     can1_free_level = 3U;
 
-    /* A full hardware mailbox is soft back-pressure, not a transmission
-     * failure.  The next control cycle submits the newest command. */
+    /* 硬件邮箱已满属于软反压，不是发送失败；下一个控制周期会提交最新命令。 */
     can2_free_level = 0U;
     for (index = 0U; index < 5U; ++index)
         assert(CanMotorBus_SendYawTestCurrent(100) == HAL_OK);

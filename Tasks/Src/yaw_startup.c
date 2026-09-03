@@ -17,8 +17,7 @@ uint8_t YawStartup_Update(YawStartupState_t *state,
     if ((state == 0) || (config == 0)) return 0U;
     if (state->ready != 0U) return 1U;
 
-    /* Waiting time alone must never authorize the motor.  Progress the
-     * settling window only when a new, fresh CAN feedback frame arrives. */
+    /* 仅等待时间绝不能授权电机。只有收到新的新鲜 CAN 反馈帧时，才推进稳定窗口。 */
     if ((now_ms - feedback_timestamp_ms) > config->max_feedback_age_ms)
     {
         state->have_feedback = 0U;

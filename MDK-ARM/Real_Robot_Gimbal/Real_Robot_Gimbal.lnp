@@ -13,6 +13,7 @@
 "real_robot_gimbal\pid_parameter.o"
 "real_robot_gimbal\pid_calc.o"
 "real_robot_gimbal\yaw_hold.o"
+"real_robot_gimbal\yaw_startup.o"
 "real_robot_gimbal\vofa.o"
 "real_robot_gimbal\launch.o"
 "real_robot_gimbal\main.o"

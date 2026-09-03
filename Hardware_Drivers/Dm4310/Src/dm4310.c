@@ -106,9 +106,8 @@ int16_t DM4310_Update(DM4310_t *motor, float dt_s)
     if (output > output_limit) output = output_limit;
     if (output < -output_limit) output = -output_limit;
 
-    /* Error diffusion preserves sub-count PID/feedforward effort across
-     * frames.  This avoids a large dead zone while every individual current
-     * command remains inside the hard safety limit. */
+    /* 误差扩散可在多帧之间保留不足一个计数的 PID/前馈输出，避免出现较大死区，
+     * 同时保证每一帧电流命令都处于硬件安全限幅内。 */
     quantized_input = output + motor->current_quantization_error;
     if (quantized_input > output_limit) quantized_input = output_limit;
     if (quantized_input < -output_limit) quantized_input = -output_limit;
@@ -140,9 +139,8 @@ uint8_t DM4310_PackCurrentCommand(const DM4310_t *motor, int16_t current,
         slot = (uint8_t)(motor->id - 5U);
     }
     encoded = (uint16_t)clamp_current(current);
-    /* DM4310 current commands are the exception on this bus: each signed
-     * 16-bit slot is little-endian (low byte first).  DJI command slots stay
-     * big-endian in their own drivers. */
+    /* DM4310 电流命令是本总线的例外：每个有符号 16 位槽位采用小端格式（低字节
+     * 在前）。DJI 电机控制槽位在各自驱动中仍采用大端格式。 */
     data[slot * 2U] = (uint8_t)encoded;
     data[slot * 2U + 1U] = (uint8_t)(encoded >> 8);
     return 1U;

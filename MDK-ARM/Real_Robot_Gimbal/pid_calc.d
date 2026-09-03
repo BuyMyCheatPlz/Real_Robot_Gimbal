@@ -37,10 +37,11 @@ real_robot_gimbal\pid_calc.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_
 real_robot_gimbal\pid_calc.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
 real_robot_gimbal\pid_calc.o: ../Hardware_Drivers/m3508+c620/Inc/m3508.h
 real_robot_gimbal\pid_calc.o: ../Hardware_Drivers/Can/Inc/motor_common.h
+real_robot_gimbal\pid_calc.o: ../Tasks/Inc/config.h
 real_robot_gimbal\pid_calc.o: ../Hardware_Drivers/m2006+c610/Inc/m2006.h
 real_robot_gimbal\pid_calc.o: ../Hardware_Drivers/Gm6020/Inc/gm6020.h
 real_robot_gimbal\pid_calc.o: ../Hardware_Drivers/Dm4310/Inc/dm4310.h
-real_robot_gimbal\pid_calc.o: ../Tasks/Inc/config.h
 real_robot_gimbal\pid_calc.o: ../Tasks/Inc/yaw_hold.h
+real_robot_gimbal\pid_calc.o: ../Tasks/Inc/yaw_startup.h
 real_robot_gimbal\pid_calc.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 real_robot_gimbal\pid_calc.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

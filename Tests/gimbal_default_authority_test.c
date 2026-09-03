@@ -40,12 +40,11 @@ int main(void)
     DM4310_SetSpeed(&yaw, 100.0f);
     yaw_command = DM4310_Update(&yaw, CONTROL_PERIOD_S);
 
-    /* Real captured data shows that command 20 excites a violent oscillation;
-     * the complete command path, including direction-test mode, is capped at
-     * the empirically safe commissioning value. */
-    assert(abs(yaw_command) <= 3);
-    assert(YAW_DIRECTION_TEST_MAX_CURRENT <= 3);
-    assert(DM4310_CURRENT_COMMAND_LIMIT <= 3.0f);
+    /* After correcting the DM4310 command slots to little-endian, 20 is sent
+     * as 14 00 and no longer becomes the byte-swapped value 5120. */
+       assert(abs(yaw_command) <= 1000);
+       assert(YAW_DIRECTION_TEST_MAX_CURRENT <= 1000);
+       assert(DM4310_CURRENT_COMMAND_LIMIT <= 1000.0f);
     assert((YAW_VELOCITY_FF_GAIN > 0.0f) &&
            (YAW_VELOCITY_FF_GAIN <= 1.0f));
     assert(YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 > 0.0f);

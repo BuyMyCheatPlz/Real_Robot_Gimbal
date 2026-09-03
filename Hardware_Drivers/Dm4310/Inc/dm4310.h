@@ -2,6 +2,7 @@
 #define DM4310_H
 
 #include "motor_common.h"
+#include "config.h"
 #include <stdint.h>
 
 #define DM4310_MOTOR_ID_MIN                  1U
@@ -10,9 +11,6 @@
 #define DM4310_CURRENT_CONTROL_ID_5_TO_8     0x4FEU
 #define DM4310_FEEDBACK_BASE_ID              0x300U
 #define DM4310_ENCODER_COUNTS                8192U
-/* Keep a conservative ceiling for the first hardware verification after the
- * command-byte-order fix.  Re-tune only after confirming the real scale. */
-#define DM4310_CURRENT_COMMAND_LIMIT             3.0f
 #define DM4310_SPEED_FEEDBACK_SCALE          100.0f
 
 typedef struct
@@ -37,7 +35,7 @@ typedef struct
 
 void DM4310_Init(DM4310_t *motor, uint8_t id, float kp, float ki);
 void DM4310_SetSpeed(DM4310_t *motor, float speed_rpm);
-/* Added to the speed-PID result and then constrained by the PID output limit. */
+/* 加到速度 PID 结果上，随后受 PID 输出限幅约束。 */
 void DM4310_SetCurrentFeedforward(DM4310_t *motor, float current);
 void DM4310_SetSpeedFilterAlpha(DM4310_t *motor, float alpha);
 void DM4310_Decode(DM4310_t *motor, const uint8_t data[8], uint32_t now_ms);

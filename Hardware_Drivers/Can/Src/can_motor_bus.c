@@ -68,9 +68,8 @@ static HAL_StatusTypeDef send_std(CAN_HandleTypeDef *hcan, uint16_t id,
     header.RTR = CAN_RTR_DATA;
     header.DLC = 8U;
     header.TransmitGlobalTime = DISABLE;
-    /* HAL_CAN_AddTxMessage reports a full mailbox as HAL_ERROR.  It is a
-     * normal back-pressure condition, not a bus failure: the next 1 kHz
-     * control tick will submit the newest command. */
+    /* HAL_CAN_AddTxMessage 在邮箱已满时返回 HAL_ERROR。这是正常的反压状态，不是
+     * 总线故障；下一个 1 kHz 控制周期会提交最新命令。 */
     if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0U) return HAL_BUSY;
     return HAL_CAN_AddTxMessage(hcan, &header, data, &mailbox);
 }
@@ -245,10 +244,9 @@ static void prepare_tx_fault(void)
 {
     if (tx_fault_prepared != 0U) return;
     reset_all_control();
-    /* Do not abort mailboxes here.  Aborting CAN2 can cancel a valid current
-     * command, then replace it with a zero-current frame on every recovery
-     * cycle.  AutoBusOff is enabled by CAN init, so genuine bus recovery is
-     * handled by the peripheral while the controller keeps requesting zero. */
+    /* 此处不要中止邮箱。中止 CAN2 可能取消有效电流命令，并在每个恢复周期用零电流
+     * 帧替换它。CAN 初始化已启用 AutoBusOff，真正的总线恢复由外设处理，控制器会
+     * 持续请求零输出。 */
     tx_fault_prepared = 1U;
 }
 
@@ -368,9 +366,8 @@ HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
         dm4310_id1 = DM4310_Update(&can2_dm4310_id1, dt_s);
     else
     {
-        /* Yaw startup deliberately bypasses its zero-speed PID.  A zero
-         * target passed through that PID can still create a large braking
-         * command from unsettled speed feedback. */
+        /* Yaw 启动阶段有意绕过零速 PID。未稳定的速度反馈即使目标为零，也可能经过
+         * PID 产生较大的制动命令。 */
         reset_yaw_control();
         dm4310_id1 = 0;
     }
@@ -504,9 +501,8 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
     primask = __get_PRIMASK();
     __disable_irq();
     ++tx_status.bus_error_count;
-    /* A last-error-code interrupt can be raised by a transient receive-side
-     * error.  It is not proof that a motor command was lost.  Actual command
-     * enqueue failures are recorded in record_tx_result(). */
+    /* 最后错误码中断可能由接收侧瞬态错误触发，不能据此认定电机命令丢失。实际命令
+     * 入队失败会记录在 record_tx_result() 中。 */
     (void)error;
     if (primask == 0U) __enable_irq();
 }

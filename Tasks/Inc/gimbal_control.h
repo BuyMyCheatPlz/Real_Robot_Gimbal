@@ -12,8 +12,7 @@ enum
     GIMBAL_MSG_REMOTE_BAD  = (1U << 4)
 };
 
-/* Bit mask exported through VOFA.  A non-zero value explains why the gimbal
- * control task is deliberately sending zero output. */
+/* 通过 VOFA 输出的位掩码。非零值表示云台控制任务正在主动发送零输出。 */
 enum
 {
     GIMBAL_INHIBIT_PITCH_OFFLINE = (1U << 0),

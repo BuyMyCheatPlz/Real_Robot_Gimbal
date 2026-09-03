@@ -30,8 +30,8 @@ typedef struct
     uint8_t initialized;
 } AttitudeEstimator_t;
 
-/* IMU yaw is a relative heading.  Keep it bounded for display and home
- * calculations; motor encoder position remains unwrapped in PID_calc. */
+/* IMU Yaw 是相对航向角。为显示和回零计算保持其有界；电机编码器位置在 PID_calc
+ * 中仍保持展开状态。 */
 static float normalize_yaw_rad(float angle)
 {
     while (angle >= PI_F) angle -= TWO_PI_F;

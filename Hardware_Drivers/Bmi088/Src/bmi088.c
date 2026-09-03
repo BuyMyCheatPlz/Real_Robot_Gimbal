@@ -200,15 +200,15 @@ HAL_StatusTypeDef BMI088_Init(BMI088_t *imu, SPI_HandleTypeDef *hspi,
                   0xB6U) != HAL_OK) return HAL_ERROR;
     HAL_Delay(50U);
 
-    /* ACC soft reset returns the interface to its default I2C state. The
-       first SPI read only selects SPI, so discard it before checking chip ID. */
+     /* ACC 软复位会将接口恢复为默认的 I2C 状态。第一次 SPI 读取只用于切换到 SPI，
+         因此在检查芯片 ID 前丢弃该次读取结果。 */
     if (read_regs(imu, acc_cs_port, acc_cs_pin, BMI088_ACC_CHIP_ID_REG,
                   &id, 1U, 1U) != HAL_OK) return HAL_ERROR;
     if (read_regs(imu, acc_cs_port, acc_cs_pin, BMI088_ACC_CHIP_ID_REG,
                   &id, 1U, 1U) != HAL_OK) return HAL_ERROR;
     if (id != BMI088_ACC_CHIP_ID) return HAL_ERROR;
 
-    /* Bring the accelerometer out of suspend in the required order. */
+    /* 按要求的顺序解除加速度计的挂起状态。 */
     if (write_reg(imu, acc_cs_port, acc_cs_pin, BMI088_ACC_PWR_CONF_REG,
                   0x00U) != HAL_OK) return HAL_ERROR;
     HAL_Delay(5U);

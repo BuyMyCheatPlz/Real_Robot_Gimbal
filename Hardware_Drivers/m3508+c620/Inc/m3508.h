@@ -2,8 +2,7 @@
 #define M3508_H
 
 #include "motor_common.h"
-
-#define M3508_CURRENT_LIMIT 16384.0f
+#include "config.h"
 
 typedef struct
 {

@@ -2,8 +2,7 @@
 #define M2006_H
 
 #include "motor_common.h"
-
-#define M2006_CURRENT_LIMIT 10000.0f
+#include "config.h"
 
 typedef struct
 {

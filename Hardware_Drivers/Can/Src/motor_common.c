@@ -74,8 +74,7 @@ float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
         candidate_integral = clampf(pid->integral + error * pid->ki * dt_s,
                                     pid->integral_limit);
         output = proportional_derivative + candidate_integral;
-        /* Do not integrate further in the direction of an already saturated
-         * actuator; permit the opposite sign to unwind the accumulator. */
+        /* 执行器已经饱和时，不要继续向饱和方向积分；允许反向误差释放累加量。 */
         if (((output < pid->output_limit) && (output > -pid->output_limit)) ||
             ((output >= pid->output_limit) && (error < 0.0f)) ||
             ((output <= -pid->output_limit) && (error > 0.0f)))

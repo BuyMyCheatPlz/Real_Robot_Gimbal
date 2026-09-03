@@ -31,8 +31,7 @@ void MotorSpeedPid_Init(MotorSpeedPid_t *pid, float kp, float ki,
 void MotorSpeedPid_Reset(MotorSpeedPid_t *pid);
 void MotorSpeedPid_SetGains(MotorSpeedPid_t *pid, float kp, float ki,
                             float kd);
-/* Error magnitude above this threshold disables integration.  A value of zero
- * keeps the legacy behaviour (no error-based separation). */
+/* 误差幅值超过此阈值时停止积分。设为 0 可保持旧行为（不按误差分离）。 */
 void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
                                          float error_limit);
 float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,

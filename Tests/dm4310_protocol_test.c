@@ -35,16 +35,16 @@ int main(void)
     assert(DM4310_PackCurrentCommand(&motor, 0x1234, &std_id,
                                      command) != 0U);
     assert(std_id == DM4310_CURRENT_CONTROL_ID_1_TO_4);
-    assert((command[0] == 0x03U) && (command[1] == 0x00U));
+    assert((command[0] == 0xE8U) && (command[1] == 0x03U));
     assert((command[2] == 0xAAU) && (command[7] == 0xAAU));
 
     memset(command, 0, sizeof(command));
     assert(DM4310_PackCurrentCommand(&motor, 20000, &std_id,
                                      command) != 0U);
-    assert((command[0] == 0x03U) && (command[1] == 0x00U));
+    assert((command[0] == 0xE8U) && (command[1] == 0x03U));
     assert(DM4310_PackCurrentCommand(&motor, -20000, &std_id,
                                      command) != 0U);
-    assert((command[0] == 0xFDU) && (command[1] == 0xFFU));
+    assert((command[0] == 0x18U) && (command[1] == 0xFCU));
 
     DM4310_Init(&motor_id5, 5U, 0.0f, 0.0f);
     memset(command, 0, sizeof(command));
@@ -85,14 +85,14 @@ int main(void)
     assert((motor.online != 0U) && (motor.last_update_ms == 1234U));
 
     DM4310_SetSpeed(&motor, 1000.0f);
-    assert(DM4310_Update(&motor, 0.001f) == 3);
+    assert(DM4310_Update(&motor, 0.001f) == 1000);
 
     DM4310_Init(&motor, 1U, 0.0f, 0.0f);
     DM4310_Decode(&motor, feedback, 1234U);
     DM4310_SetCurrentFeedforward(&motor, 1000);
-    assert(DM4310_Update(&motor, 0.001f) == 3);
+    assert(DM4310_Update(&motor, 0.001f) == 1000);
     DM4310_SetCurrentFeedforward(&motor, 20000);
-    assert(DM4310_Update(&motor, 0.001f) == 3);
+    assert(DM4310_Update(&motor, 0.001f) == 1000);
 
     /* Low-torque PID and feedforward values must survive the integer wire
      * format as a bounded pulse-density average instead of truncating to

@@ -63,8 +63,8 @@ HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *hspi, uint8_t *data,
     reg = (uint8_t)(data[0] & 0x7FU);
     if (selected_device == DEVICE_ACCEL)
     {
-        /* The ACC ignores SPI writes until a post-reset SPI read has selected
-           the interface.  It also requires PWR_CONF before PWR_CTRL. */
+          /* ACC 在复位后的 SPI 读取选择接口前会忽略 SPI 写入，并且必须先配置
+              PWR_CONF，再配置 PWR_CTRL。 */
         if (acc_spi_active == 0U) return HAL_OK;
         if ((reg == ACC_SOFTRESET_REG) && (data[1] == 0xB6U))
         {
@@ -98,7 +98,7 @@ HAL_StatusTypeDef HAL_SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *data,
     if ((selected_device == DEVICE_ACCEL) && (length == 1U) &&
         (accel_read_phase == 0U))
     {
-        accel_read_phase = 1U; /* BMI088 ACC SPI dummy byte. */
+        accel_read_phase = 1U; /* BMI088 ACC SPI 占位字节。 */
         return HAL_OK;
     }
 
@@ -112,7 +112,7 @@ HAL_StatusTypeDef HAL_SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *data,
         else if ((read_reg == ACC_DATA_REG) && (length == 6U) &&
                  (acc_spi_active != 0U) && (acc_enabled != 0U))
         {
-            /* x=+1000, y=-1000, z=+16384 raw counts. */
+            /* x=+1000、y=-1000、z=+16384 原始计数。 */
             data[0] = 0xE8U;
             data[1] = 0x03U;
             data[2] = 0x18U;
@@ -120,7 +120,7 @@ HAL_StatusTypeDef HAL_SPI_Receive(SPI_HandleTypeDef *hspi, uint8_t *data,
             data[4] = 0x00U;
             data[5] = 0x40U;
         }
-        /* A completed read enables the ACC SPI interface after reset. */
+        /* 完成读取后，复位后的 ACC SPI 接口才可用。 */
         acc_spi_active = 1U;
         accel_read_phase = 0U;
     }
