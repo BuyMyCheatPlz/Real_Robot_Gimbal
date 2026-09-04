@@ -50,7 +50,8 @@ typedef enum
     PID_PARAM_YAW_KD_POS,
     PID_PARAM_YAW_KP_SPD,
     PID_PARAM_YAW_KI_SPD,
-    PID_PARAM_YAW_KD_SPD
+    PID_PARAM_YAW_KD_SPD,
+    PID_PARAM_PITCH_GRAVITY_FF
 } PidParameterId_t;
 
 typedef struct
@@ -84,6 +85,7 @@ typedef struct
     float pitch_speed_rpm;
     float yaw_speed_rad_s;
     float gravity_feedforward;
+    float pitch_gravity_ff_setting;
     float yaw_profile_target_rad;
     float yaw_speed_target_rad_s;
     float yaw_trajectory_speed_rad_s;
@@ -94,6 +96,12 @@ typedef struct
     float imu_pitch_rad;
     float imu_yaw_rad;
     uint32_t can_tx_failure_count;
+    uint32_t can_bus_error_count;
+    uint32_t can1_busoff_count;
+    uint32_t can2_busoff_count;
+    uint32_t can1_recovery_count;
+    uint32_t can2_recovery_count;
+    uint32_t can2_last_error;
     uint32_t dm4310_feedback_count;
     uint32_t can2_tx_complete_count;
     uint32_t can2_tx_busy_count;

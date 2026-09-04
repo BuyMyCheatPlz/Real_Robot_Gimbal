@@ -129,6 +129,28 @@ static float signf(float value)
     return 0.0f;
 }
 
+static float pitch_gravity_feedforward_scale(float pitch_rad)
+{
+    const float min_rad = PITCH_GRAVITY_ANGLE_MIN_DEG * TASK_DEG_TO_RAD;
+    const float max_rad = PITCH_GRAVITY_ANGLE_MAX_DEG * TASK_DEG_TO_RAD;
+    float limited_pitch = pitch_rad;
+    float min_torque;
+    float max_torque;
+    float normalization_torque;
+    float scale;
+
+    if (limited_pitch < min_rad) limited_pitch = min_rad;
+    if (limited_pitch > max_rad) limited_pitch = max_rad;
+    min_torque = sinf(min_rad);
+    max_torque = sinf(max_rad);
+    normalization_torque = (limited_pitch < 0.0f) ?
+        fabsf(min_torque) : fabsf(max_torque);
+    if (normalization_torque < 0.001f) return 0.0f;
+    scale = PITCH_GRAVITY_SIGN * sinf(limited_pitch) /
+            normalization_torque;
+    return scale;
+}
+
 /* 有限加速度轨迹同时提供速度和加速度参考，避免对不连续的位置阶跃求导。 */
 static void yaw_trajectory_step(float *position, float *speed,
                                 float *acceleration, float target,
@@ -217,6 +239,7 @@ void PID_calc(void *argument)
     float yaw_profile_speed = 0.0f;
     float yaw_profile_acceleration = 0.0f;
     float pitch_home = 0.0f;
+    float pitch_gravity_ff_voltage = PITCH_GRAVITY_FF_MAX_VOLTAGE;
     float yaw_home = 0.0f;
     float imu_pitch = 0.0f;
     float imu_yaw = 0.0f;
@@ -320,6 +343,11 @@ void PID_calc(void *argument)
                     break;
                 case PID_PARAM_YAW_KD_SPD:
                     can2_dm4310_id1.speed_pid.kd = parameter_update.value;
+                    break;
+                case PID_PARAM_PITCH_GRAVITY_FF:
+                    pitch_gravity_ff_voltage = parameter_update.value;
+                    if (pitch_gravity_ff_voltage > GM6020_VOLTAGE_LIMIT)
+                        pitch_gravity_ff_voltage = GM6020_VOLTAGE_LIMIT;
                     break;
                 default:
                     break;
@@ -445,7 +473,7 @@ void PID_calc(void *argument)
                                                               &yaw_test_active);
             uint8_t common_control_permitted = (uint8_t)(
                 (imu_fresh != 0U) && (can_healthy != 0U) &&
-                (overrun_pending == 0U));
+                (overrun_pending == 0U) && (remote_fresh != 0U));
             uint8_t pitch_control_permitted = (uint8_t)(
                 (common_control_permitted != 0U) &&
                 (YAW_COMMISSIONING_MODE == 0U) &&
@@ -630,12 +658,20 @@ void PID_calc(void *argument)
                 }
                 if (pitch_target_initialized != 0U)
                 {
-                    pitch_speed_target_rpm = position_pid(
-                        &pitch_angle_pid, pitch_target, pitch_angle_actual,
-                        control_dt_s);
-                    gravity_feedforward = PITCH_GRAVITY_SIGN *
-                        PITCH_GRAVITY_FF_MAX_VOLTAGE *
-                        cosf(imu_pitch - PITCH_GRAVITY_ZERO_RAD);
+                    if (PITCH_GRAVITY_ONLY_ENABLE != 0U)
+                    {
+                        reset_position_pid(&pitch_angle_pid);
+                        MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+                        pitch_speed_target_rpm = 0.0f;
+                    }
+                    else
+                    {
+                        pitch_speed_target_rpm = position_pid(
+                            &pitch_angle_pid, pitch_target, pitch_angle_actual,
+                            control_dt_s);
+                    }
+                    gravity_feedforward = pitch_gravity_ff_voltage *
+                        pitch_gravity_feedforward_scale(imu_pitch);
                     GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
                         PITCH_MOTOR_SIGN * gravity_feedforward);
                     GM6020_SetSpeed(&can1_gm6020_id2,
@@ -692,6 +728,18 @@ void PID_calc(void *argument)
                 (uint8_t)(CanMotorBus_TxHealthy() == 0U);
             gimbal_control_state.can_tx_failure_count =
                 bus_status.total_tx_failures;
+            gimbal_control_state.can_bus_error_count =
+                bus_status.bus_error_count;
+            gimbal_control_state.can1_busoff_count =
+                bus_status.can1_busoff_count;
+            gimbal_control_state.can2_busoff_count =
+                bus_status.can2_busoff_count;
+            gimbal_control_state.can1_recovery_count =
+                bus_status.can1_recovery_count;
+            gimbal_control_state.can2_recovery_count =
+                bus_status.can2_recovery_count;
+            gimbal_control_state.can2_last_error =
+                bus_status.can2_last_error;
             gimbal_control_state.dm4310_feedback_count =
                 bus_status.dm4310_feedback_count;
             gimbal_control_state.can2_tx_complete_count =
@@ -753,6 +801,8 @@ void PID_calc(void *argument)
                 pitch_speed_target_rpm;
         }
 
+        gimbal_control_state.pitch_gravity_ff_setting =
+            pitch_gravity_ff_voltage;
         gimbal_control_state.pitch_target_rad = pitch_target;
         gimbal_control_state.yaw_target_rad = yaw_target;
         gimbal_control_state.pitch_encoder_rad = pitch_angle_actual;

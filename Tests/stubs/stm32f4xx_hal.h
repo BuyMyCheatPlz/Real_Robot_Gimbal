@@ -15,7 +15,12 @@ typedef struct
 {
     void *Instance;
     uint32_t ErrorCode;
+    uint32_t State;
 } CAN_HandleTypeDef;
+
+typedef uint32_t HAL_CAN_StateTypeDef;
+#define HAL_CAN_STATE_READY       1U
+#define HAL_CAN_STATE_LISTENING   2U
 
 typedef struct
 {
@@ -110,6 +115,8 @@ void HAL_NVIC_EnableIRQ(int irq);
 HAL_StatusTypeDef HAL_CAN_ConfigFilter(CAN_HandleTypeDef *hcan,
                                        CAN_FilterTypeDef *filter);
 HAL_StatusTypeDef HAL_CAN_Start(CAN_HandleTypeDef *hcan);
+HAL_StatusTypeDef HAL_CAN_Stop(CAN_HandleTypeDef *hcan);
+HAL_CAN_StateTypeDef HAL_CAN_GetState(const CAN_HandleTypeDef *hcan);
 HAL_StatusTypeDef HAL_CAN_ActivateNotification(CAN_HandleTypeDef *hcan,
                                                uint32_t notifications);
 HAL_StatusTypeDef HAL_CAN_AddTxMessage(CAN_HandleTypeDef *hcan,

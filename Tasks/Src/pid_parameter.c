@@ -22,7 +22,9 @@ static const PidParameterName_t parameter_names[] = {
     {"YAW_KD_POS", PID_PARAM_YAW_KD_POS},
     {"YAW_KP_SPD", PID_PARAM_YAW_KP_SPD},
     {"YAW_KI_SPD", PID_PARAM_YAW_KI_SPD},
-    {"YAW_KD_SPD", PID_PARAM_YAW_KD_SPD}
+    {"YAW_KD_SPD", PID_PARAM_YAW_KD_SPD},
+    {"PITCH_GRAVITY_FF", PID_PARAM_PITCH_GRAVITY_FF},
+    {"PITCH_GRAVITY_FF_MAX_VOLTAGE", PID_PARAM_PITCH_GRAVITY_FF}
 };
 
 uint8_t PidParameter_Parse(const char *command,

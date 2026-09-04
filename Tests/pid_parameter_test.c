@@ -34,6 +34,17 @@ int main(void)
         assert(fabsf(update.value - (float)(index + 1U)) < 0.0001f);
     }
 
+    assert(PidParameter_Parse("PITCH_GRAVITY_FF=1500", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
+    assert(fabsf(update.value - 1500.0f) < 0.0001f);
+    assert(PidParameter_Parse("PITCH_GRAVITY_FF=30000", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
+    assert(fabsf(update.value - 30000.0f) < 0.0001f);
+    assert(PidParameter_Parse("PITCH_GRAVITY_FF_MAX_VOLTAGE=30000",
+                             &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
+    assert(fabsf(update.value - 30000.0f) < 0.0001f);
+
     /* 拒绝含义不明确的旧命令，避免同时修改两个轴。 */
     assert(PidParameter_Parse("KP_POS=1", &update) == 0U);
     assert(PidParameter_Parse("KP_SPD=1", &update) == 0U);

@@ -20,6 +20,14 @@ typedef struct
     uint32_t can2_tx_complete_count;
     uint32_t can1_tx_busy_count;
     uint32_t can2_tx_busy_count;
+    uint32_t can1_rx_count;
+    uint32_t can2_rx_count;
+    uint32_t can1_last_error;
+    uint32_t can2_last_error;
+    uint32_t can1_busoff_count;
+    uint32_t can2_busoff_count;
+    uint32_t can1_recovery_count;
+    uint32_t can2_recovery_count;
     uint16_t last_can2_rx_std_id;
     uint16_t consecutive_tx_failures;
     uint16_t recovery_zero_frames;

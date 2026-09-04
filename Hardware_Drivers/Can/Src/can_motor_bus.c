@@ -12,6 +12,13 @@ static CAN_HandleTypeDef *bus_can1;
 static CAN_HandleTypeDef *bus_can2;
 static volatile CanMotorBusStatus_t tx_status;
 static uint8_t tx_fault_prepared;
+static uint32_t last_command_send_ms;
+static uint8_t command_send_initialized;
+static volatile uint8_t can1_recovery_pending;
+static volatile uint8_t can2_recovery_pending;
+static volatile uint8_t can_service_busy;
+
+#define GM6020_FEEDBACK_BASE_ID 0x204U
 
 static void record_gimbal_commands(int16_t gm6020_id2, int16_t dm4310_id1)
 {
@@ -68,10 +75,16 @@ static HAL_StatusTypeDef send_std(CAN_HandleTypeDef *hcan, uint16_t id,
     header.RTR = CAN_RTR_DATA;
     header.DLC = 8U;
     header.TransmitGlobalTime = DISABLE;
-    /* HAL_CAN_AddTxMessage 在邮箱已满时返回 HAL_ERROR。这是正常的反压状态，不是
-     * 总线故障；下一个 1 kHz 控制周期会提交最新命令。 */
+    /* 邮箱已满属于发送反压；调用方会在下一次固定发布周期提交最新命令。 */
     if (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0U) return HAL_BUSY;
     return HAL_CAN_AddTxMessage(hcan, &header, data, &mailbox);
+}
+
+static uint8_t tx_capacity_available(CAN_HandleTypeDef *hcan,
+                                     uint8_t required_mailboxes)
+{
+    return (uint8_t)(HAL_CAN_GetTxMailboxesFreeLevel(hcan) >=
+                     required_mailboxes);
 }
 
 static void accumulate_send_result(HAL_StatusTypeDef result, uint8_t bit,
@@ -151,6 +164,28 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
             return HAL_ERROR;
         }
     }
+
+    if ((YAW_COMMISSIONING_MODE == 0U) &&
+        (tx_capacity_available(bus_can1, 2U) == 0U))
+    {
+        busy_mask |= 0x03U;
+    }
+
+    {
+        /* DM4310（Yaw 云台）必须持续收到 0x3FE 才能维持反馈，因此优先保证它的
+         * 发送；M2006 拨盘只有在邮箱还能多放一帧时才发送，避免被卡住的 M2006
+         * 帧把 DM4310 的控制帧也一起饿死。 */
+        if (tx_capacity_available(bus_can2, 1U) == 0U)
+        {
+            busy_mask |= 0x08U;
+        }
+        else if ((YAW_COMMISSIONING_MODE == 0U) &&
+                 (can2_m2006_id5.feedback.online != 0U) &&
+                 (tx_capacity_available(bus_can2, 2U) == 0U))
+        {
+            busy_mask |= 0x04U;
+        }
+    }
     /* Continue sending the DM4310 control ID while feedback is offline.  Some
      * current-control firmware only resumes periodic feedback after receiving
      * valid control traffic; silencing 0x3FE here would make an offline state
@@ -169,22 +204,31 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
 
     if (YAW_COMMISSIONING_MODE == 0U)
     {
-        result = send_std(bus_can1, 0x200U, can1_c620);
-        accumulate_send_result(result, 1U, &failure_mask, &busy_mask, &status);
-    }
-    if (YAW_COMMISSIONING_MODE == 0U)
-    {
-        result = send_std(bus_can1, gm_control_id, can1_gm);
-        accumulate_send_result(result, 2U, &failure_mask, &busy_mask, &status);
+        if ((busy_mask & 0x03U) == 0U)
+        {
+            result = send_std(bus_can1, 0x200U, can1_c620);
+            accumulate_send_result(result, 1U, &failure_mask, &busy_mask,
+                                   &status);
+            result = send_std(bus_can1, gm_control_id, can1_gm);
+            accumulate_send_result(result, 2U, &failure_mask, &busy_mask,
+                                   &status);
+        }
     }
     if ((YAW_COMMISSIONING_MODE == 0U) &&
         (can2_m2006_id5.feedback.online != 0U))
     {
-        result = send_std(bus_can2, 0x1FFU, can2_c610);
-        accumulate_send_result(result, 4U, &failure_mask, &busy_mask, &status);
+        if ((busy_mask & 0x0CU) == 0U)
+        {
+            result = send_std(bus_can2, 0x1FFU, can2_c610);
+            accumulate_send_result(result, 4U, &failure_mask, &busy_mask,
+                                   &status);
+        }
     }
-    result = send_std(bus_can2, dm_control_id, can2_dm);
-    accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
+    if ((busy_mask & 0x08U) == 0U)
+    {
+        result = send_std(bus_can2, dm_control_id, can2_dm);
+        accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
+    }
     record_tx_diagnostics(failure_mask, busy_mask);
     return status;
 }
@@ -294,12 +338,83 @@ static HAL_StatusTypeDef guarded_send_commands(int16_t m3508_id2,
     return status;
 }
 
+static uint8_t command_send_due(uint32_t now_ms)
+{
+    if (command_send_initialized == 0U)
+    {
+        command_send_initialized = 1U;
+        last_command_send_ms = now_ms;
+        return 1U;
+    }
+    if ((now_ms - last_command_send_ms) < CAN_COMMAND_PERIOD_MS)
+        return 0U;
+    last_command_send_ms = now_ms;
+    return 1U;
+}
+
 static void update_online(DjiMotorFeedback_t *feedback, uint32_t now_ms)
 {
     if ((feedback->online != 0U) &&
         ((now_ms - feedback->last_update_ms) > CAN_MOTOR_OFFLINE_TIMEOUT_MS))
     {
         feedback->online = 0U;
+    }
+}
+
+static void recover_can_if_needed(CAN_HandleTypeDef *hcan,
+                                  volatile uint8_t *pending,
+                                  volatile uint32_t *recovery_count)
+{
+    (void)hcan;
+    (void)recovery_count;
+    /* ABOM（AutoBusOff）会由硬件自动恢复总线。这里不再做软件 Stop→Start：
+     * ABOM 在 ~1.4ms 内已恢复并重新开始重发，而本函数在任务上下文延迟执行，
+     * 此时 Stop 会打断正在重发的半截帧、进出 init mode，把残缺帧留在总线上，
+     * 诱发其它节点的错误帧并再次推高 TEC，形成 1k+ Hz 的 bus-off 死循环。
+     * 因此只清 pending，恢复完全交给 ABOM。 */
+    *pending = 0U;
+}
+
+static void process_rx_fifo(CAN_HandleTypeDef *hcan, uint32_t now_ms)
+{
+    CAN_RxHeaderTypeDef header;
+    uint8_t data[8];
+
+    while (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0U)
+    {
+        if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &header, data) != HAL_OK)
+            break;
+        if ((header.IDE != CAN_ID_STD) || (header.RTR != CAN_RTR_DATA) ||
+            (header.DLC != 8U))
+            continue;
+
+        if (hcan == bus_can1)
+            ++tx_status.can1_rx_count;
+        else if (hcan == bus_can2)
+            ++tx_status.can2_rx_count;
+
+        if (hcan == bus_can1)
+        {
+            if (header.StdId == 0x202U)
+                M3508_Decode(&can1_m3508_id2, data, now_ms);
+            else if (header.StdId == 0x203U)
+                M3508_Decode(&can1_m3508_id3, data, now_ms);
+            else if (header.StdId ==
+                     (GM6020_FEEDBACK_BASE_ID + can1_gm6020_id2.id))
+                GM6020_Decode(&can1_gm6020_id2, data, now_ms);
+        }
+        else if (hcan == bus_can2)
+        {
+            tx_status.last_can2_rx_std_id = (uint16_t)header.StdId;
+            if (header.StdId == 0x205U)
+                M2006_Decode(&can2_m2006_id5, data, now_ms);
+            else if (header.StdId ==
+                     (DM4310_FEEDBACK_BASE_ID + can2_dm4310_id1.id))
+            {
+                DM4310_Decode(&can2_dm4310_id1, data, now_ms);
+                ++tx_status.dm4310_feedback_count;
+            }
+        }
     }
 }
 
@@ -311,6 +426,11 @@ HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
     bus_can2 = can2;
     memset((void *)&tx_status, 0, sizeof(tx_status));
     tx_fault_prepared = 0U;
+    last_command_send_ms = 0U;
+    command_send_initialized = 0U;
+    can1_recovery_pending = 0U;
+    can2_recovery_pending = 0U;
+    can_service_busy = 0U;
 
     /* 驱动层增益保持为零，任务启动后再加载 config.h 中的实车参数。 */
     M3508_Init(&can1_m3508_id2, 2U, 0.0f, 0.0f);
@@ -319,7 +439,9 @@ HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
     M2006_Init(&can2_m2006_id5, 5U, 0.0f, 0.0f);
     DM4310_Init(&can2_dm4310_id1, 1U, 0.0f, 0.0f);
 
-    if (configure_filter(can1, 0U, 0x202U, 0x203U, 0x206U, 0x206U) != HAL_OK)
+    if (configure_filter(can1, 0U, 0x202U, 0x203U,
+                         GM6020_FEEDBACK_BASE_ID + can1_gm6020_id2.id,
+                         GM6020_FEEDBACK_BASE_ID + can1_gm6020_id2.id) != HAL_OK)
         return HAL_ERROR;
     if (configure_filter(can2, 14U, 0x205U,
                          DM4310_FEEDBACK_BASE_ID + can2_dm4310_id1.id,
@@ -349,6 +471,31 @@ HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
 
 void CanMotorBus_CheckOffline(uint32_t now_ms)
 {
+    uint32_t primask;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (can_service_busy != 0U)
+    {
+        if (primask == 0U) __enable_irq();
+        return;
+    }
+    can_service_busy = 1U;
+    if (primask == 0U) __enable_irq();
+
+    /* RX FIFO 由 RX0 中断直接消费；任务上下文只做离线检查和总线恢复。 */
+    if (bus_can1 != 0)
+    {
+        recover_can_if_needed(bus_can1, &can1_recovery_pending,
+                              &tx_status.can1_recovery_count);
+        process_rx_fifo(bus_can1, now_ms);
+    }
+    if (bus_can2 != 0)
+    {
+        recover_can_if_needed(bus_can2, &can2_recovery_pending,
+                              &tx_status.can2_recovery_count);
+        process_rx_fifo(bus_can2, now_ms);
+    }
     update_online(&can1_m3508_id2.feedback, now_ms);
     update_online(&can1_m3508_id3.feedback, now_ms);
     update_online(&can1_gm6020_id2.feedback, now_ms);
@@ -356,6 +503,11 @@ void CanMotorBus_CheckOffline(uint32_t now_ms)
     if ((can2_dm4310_id1.online != 0U) &&
         ((now_ms - can2_dm4310_id1.last_update_ms) > CAN_MOTOR_OFFLINE_TIMEOUT_MS))
         can2_dm4310_id1.online = 0U;
+
+    primask = __get_PRIMASK();
+    __disable_irq();
+    can_service_busy = 0U;
+    if (primask == 0U) __enable_irq();
 }
 
 HAL_StatusTypeDef CanMotorBus_Update(float dt_s)
@@ -367,6 +519,7 @@ HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
                                              uint8_t pitch_enabled,
                                              uint8_t yaw_enabled)
 {
+    uint32_t now_ms;
     int16_t m3508_id2;
     int16_t m3508_id3;
     int16_t gm6020_id2;
@@ -374,7 +527,8 @@ HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
     int16_t dm4310_id1;
 
     if ((bus_can1 == 0) || (bus_can2 == 0) || (dt_s <= 0.0f)) return HAL_ERROR;
-    CanMotorBus_CheckOffline(HAL_GetTick());
+    now_ms = HAL_GetTick();
+    CanMotorBus_CheckOffline(now_ms);
 
     m3508_id2 = M3508_Update(&can1_m3508_id2, dt_s);
     m3508_id3 = M3508_Update(&can1_m3508_id3, dt_s);
@@ -395,6 +549,9 @@ HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
         reset_yaw_control();
         dm4310_id1 = 0;
     }
+    /* Keep the PID loop fast, but publish the latest command at a fixed lower
+     * rate so CAN mailbox pressure does not become control noise. */
+    if (command_send_due(now_ms) == 0U) return HAL_OK;
     return guarded_send_commands(m3508_id2, m3508_id3, gm6020_id2,
                                  m2006_id5, dm4310_id1);
 }
@@ -412,16 +569,19 @@ HAL_StatusTypeDef CanMotorBus_SendYawTestCurrent(int16_t current)
 
 HAL_StatusTypeDef CanMotorBus_StopGimbal(float dt_s)
 {
+    uint32_t now_ms;
     int16_t m3508_id2;
     int16_t m3508_id3;
     int16_t m2006_id5;
     if (dt_s <= 0.0f) return HAL_ERROR;
-    CanMotorBus_CheckOffline(HAL_GetTick());
+    now_ms = HAL_GetTick();
+    CanMotorBus_CheckOffline(now_ms);
     if (CanMotorBus_TxHealthy() == 0U) return CanMotorBus_StopAll();
     reset_gimbal_control();
     m3508_id2 = M3508_Update(&can1_m3508_id2, dt_s);
     m3508_id3 = M3508_Update(&can1_m3508_id3, dt_s);
     m2006_id5 = M2006_Update(&can2_m2006_id5, dt_s);
+    if (command_send_due(now_ms) == 0U) return HAL_OK;
     return guarded_send_commands(m3508_id2, m3508_id3, 0,
                                  m2006_id5, 0);
 }
@@ -480,40 +640,10 @@ void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-    CAN_RxHeaderTypeDef header;
-    uint8_t data[8];
-    uint32_t now_ms = HAL_GetTick();
-
-    while (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0U)
-    {
-        if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &header, data) != HAL_OK)
-            break;
-        if ((header.IDE != CAN_ID_STD) || (header.RTR != CAN_RTR_DATA))
-            continue;
-
-        if (hcan == bus_can1)
-        {
-            if ((header.StdId == 0x202U) && (header.DLC == 8U))
-                M3508_Decode(&can1_m3508_id2, data, now_ms);
-            else if ((header.StdId == 0x203U) && (header.DLC == 8U))
-                M3508_Decode(&can1_m3508_id3, data, now_ms);
-            else if ((header.StdId == 0x206U) && (header.DLC == 8U))
-                GM6020_Decode(&can1_gm6020_id2, data, now_ms);
-        }
-        else if (hcan == bus_can2)
-        {
-            tx_status.last_can2_rx_std_id = (uint16_t)header.StdId;
-            if ((header.StdId == 0x205U) && (header.DLC == 8U))
-                M2006_Decode(&can2_m2006_id5, data, now_ms);
-            else if ((header.StdId ==
-                      (DM4310_FEEDBACK_BASE_ID + can2_dm4310_id1.id)) &&
-                     (header.DLC == 8U))
-            {
-                DM4310_Decode(&can2_dm4310_id1, data, now_ms);
-                ++tx_status.dm4310_feedback_count;
-            }
-        }
-    }
+    if (hcan == bus_can1)
+        process_rx_fifo(hcan, HAL_GetTick());
+    else if (hcan == bus_can2)
+        process_rx_fifo(hcan, HAL_GetTick());
 }
 
 void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
@@ -525,8 +655,23 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
     primask = __get_PRIMASK();
     __disable_irq();
     ++tx_status.bus_error_count;
-    /* 最后错误码中断可能由接收侧瞬态错误触发，不能据此认定电机命令丢失。实际命令
-     * 入队失败会记录在 record_tx_result() 中。 */
-    (void)error;
+    if (hcan == bus_can1)
+    {
+        tx_status.can1_last_error = error;
+        if ((error & HAL_CAN_ERROR_BOF) != 0U)
+        {
+            ++tx_status.can1_busoff_count;
+            can1_recovery_pending = 1U;
+        }
+    }
+    else
+    {
+        tx_status.can2_last_error = error;
+        if ((error & HAL_CAN_ERROR_BOF) != 0U)
+        {
+            ++tx_status.can2_busoff_count;
+            can2_recovery_pending = 1U;
+        }
+    }
     if (primask == 0U) __enable_irq();
 }

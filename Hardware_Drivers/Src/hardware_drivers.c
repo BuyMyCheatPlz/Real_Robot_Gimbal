@@ -27,6 +27,10 @@ HAL_StatusTypeDef HardwareDrivers_Init(void)
     __HAL_GPIO_EXTI_CLEAR_IT(INT_Accel_Pin);
     __HAL_GPIO_EXTI_CLEAR_IT(INT_Gyro_Pin);
     if (bmi_status != HAL_OK) return HAL_ERROR;
+    /* 与 CAN/SPI/DMA 中断同级（优先级 5），避免 1 kHz 的 BMI088 DRDY 中断以
+     * 默认优先级 0 抢占 CAN RX0，导致反馈帧丢失、电机超时掉线。 */
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 5U, 0U);
+    HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5U, 0U);
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
     HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
     return HAL_OK;

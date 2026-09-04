@@ -153,24 +153,25 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        /* Pitch GM6020 diagnostics: target, feedback, PID output and health. */
-        channels[0] = snapshot.pitch_target_rad * 57.295779513082320876f;
-        channels[1] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
-        channels[2] = (snapshot.pitch_target_rad - snapshot.pitch_encoder_rad) *
-                      57.295779513082320876f;
-        channels[3] = snapshot.pitch_speed_target_rpm;
+        /* Pitch gravity-feedforward diagnostics. */
+        channels[0] = snapshot.imu_pitch_rad * 57.295779513082320876f;
+        channels[1] = snapshot.pitch_gravity_ff_setting;
+        channels[2] = snapshot.gravity_feedforward;
+        channels[3] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
         channels[4] = snapshot.pitch_speed_rpm;
-        channels[5] = (float)snapshot.pitch_can_command;
-        channels[6] = snapshot.gravity_feedforward;
-        channels[7] = (float)snapshot.can1_gm6020_id2_online;
-        channels[8] = snapshot.imu_pitch_rad * 57.295779513082320876f;
-        channels[9] = (float)snapshot.active;
-        channels[10] = (float)snapshot.feedback_healthy;
-        channels[11] = (float)snapshot.control_inhibit_flags;
-        channels[12] = (float)snapshot.can_last_send_failure_mask;
-        channels[13] = (float)snapshot.can1_tx_free_level;
-        channels[14] = (float)snapshot.can_tx_failure_count;
-        channels[15] = (float)snapshot.can1_m3508_id2_online;
+        channels[5] = (float)snapshot.can1_gm6020_id2_online;
+        channels[6] = (float)snapshot.control_inhibit_flags;
+        channels[7] = (float)snapshot.can1_tx_free_level;
+        channels[8] = (float)snapshot.can2_dm4310_id1_online;
+        channels[9] = (float)snapshot.dm4310_feedback_count;
+        channels[10] = (float)snapshot.can2_tx_free_level;
+        channels[11] = (float)snapshot.can2_last_rx_std_id;
+        channels[12] = (float)snapshot.can_bus_error_count;
+        channels[13] = (float)snapshot.can1_busoff_count;
+        channels[14] = (float)snapshot.can1_recovery_count;
+        channels[15] = (float)snapshot.can2_busoff_count;
+        channels[16] = (float)snapshot.can2_recovery_count;
+        channels[17] = (float)snapshot.can2_last_error;
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;
         wake_tick += VOFA_PERIOD_MS;

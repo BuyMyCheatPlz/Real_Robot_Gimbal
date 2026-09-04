@@ -262,9 +262,9 @@ void Data_Process(void *argument)
                 }
                 if (current_yaw_sign != previous_yaw_sign)
                 {
-                    if (current_yaw_sign > 0)
+                    if (current_yaw_sign < 0)
                         message.yaw_delta_rad += COMMAND_STEP_RAD;
-                    else if (current_yaw_sign < 0)
+                    else if (current_yaw_sign > 0)
                         message.yaw_delta_rad -= COMMAND_STEP_RAD;
                     if (current_yaw_sign != 0)
                         message.flags |= GIMBAL_MSG_YAW_DELTA;

@@ -226,11 +226,17 @@ void DMA1_Stream6_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles CAN1 TX interrupts.
+  * @brief This function handles EXTI line0 interrupt.
   */
-void CAN1_TX_IRQHandler(void)
+void EXTI0_IRQHandler(void)
 {
-  HAL_CAN_IRQHandler(&hcan1);
+  /* USER CODE BEGIN EXTI0_IRQn 0 */
+
+  /* USER CODE END EXTI0_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(INT_Accel_Pin);
+  /* USER CODE BEGIN EXTI0_IRQn 1 */
+
+  /* USER CODE END EXTI0_IRQn 1 */
 }
 
 /**
@@ -304,20 +310,6 @@ void DMA2_Stream0_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles EXTI line0 interrupt.
-  */
-void EXTI0_IRQHandler(void)
-{
-  /* USER CODE BEGIN EXTI0_IRQn 0 */
-
-  /* USER CODE END EXTI0_IRQn 0 */
-  HAL_GPIO_EXTI_IRQHandler(INT_Accel_Pin);
-  /* USER CODE BEGIN EXTI0_IRQn 1 */
-
-  /* USER CODE END EXTI0_IRQn 1 */
-}
-
-/**
   * @brief This function handles DMA2 stream3 global interrupt.
   */
 void DMA2_Stream3_IRQHandler(void)
@@ -343,14 +335,6 @@ void EXTI9_5_IRQHandler(void)
   /* USER CODE BEGIN EXTI9_5_IRQn 1 */
 
   /* USER CODE END EXTI9_5_IRQn 1 */
-}
-
-/**
-  * @brief This function handles CAN2 TX interrupts.
-  */
-void CAN2_TX_IRQHandler(void)
-{
-  HAL_CAN_IRQHandler(&hcan2);
 }
 
 /**

@@ -17,6 +17,27 @@ static uint8_t can2_free_level = 3U;
 static uint32_t abort_request_count;
 static SentFrame_t sent_frames[16];
 static uint8_t sent_count;
+static CAN_FilterTypeDef configured_filters[2];
+static CAN_RxHeaderTypeDef pending_headers[2];
+static uint8_t pending_data[2][8];
+static uint8_t pending_rx[2];
+
+static uint8_t can_index(const CAN_HandleTypeDef *hcan)
+{
+    return (hcan->Instance == (void *)1) ? 0U : 1U;
+}
+
+static void inject_rx(CAN_HandleTypeDef *hcan, uint16_t id,
+                      const uint8_t data[8])
+{
+    uint8_t index = can_index(hcan);
+    pending_headers[index].StdId = id;
+    pending_headers[index].IDE = CAN_ID_STD;
+    pending_headers[index].RTR = CAN_RTR_DATA;
+    pending_headers[index].DLC = 8U;
+    memcpy(pending_data[index], data, 8U);
+    pending_rx[index] = 1U;
+}
 
 uint32_t __get_PRIMASK(void) { return 0U; }
 void __disable_irq(void) {}
@@ -32,14 +53,22 @@ void HAL_NVIC_EnableIRQ(int irq) { (void)irq; }
 HAL_StatusTypeDef HAL_CAN_ConfigFilter(CAN_HandleTypeDef *hcan,
                                        CAN_FilterTypeDef *filter)
 {
-    (void)hcan;
-    (void)filter;
+    configured_filters[can_index(hcan)] = *filter;
     return HAL_OK;
 }
 HAL_StatusTypeDef HAL_CAN_Start(CAN_HandleTypeDef *hcan)
 {
-    (void)hcan;
+    hcan->State = HAL_CAN_STATE_LISTENING;
     return HAL_OK;
+}
+HAL_StatusTypeDef HAL_CAN_Stop(CAN_HandleTypeDef *hcan)
+{
+    hcan->State = HAL_CAN_STATE_READY;
+    return HAL_OK;
+}
+HAL_CAN_StateTypeDef HAL_CAN_GetState(const CAN_HandleTypeDef *hcan)
+{
+    return hcan->State;
 }
 HAL_StatusTypeDef HAL_CAN_ActivateNotification(CAN_HandleTypeDef *hcan,
                                                uint32_t notifications)
@@ -89,23 +118,25 @@ uint32_t HAL_CAN_GetTxMailboxesFreeLevel(const CAN_HandleTypeDef *hcan)
 uint32_t HAL_CAN_GetRxFifoFillLevel(const CAN_HandleTypeDef *hcan,
                                    uint32_t fifo)
 {
-    (void)hcan;
     (void)fifo;
-    return 0U;
+    return pending_rx[can_index(hcan)];
 }
 HAL_StatusTypeDef HAL_CAN_GetRxMessage(CAN_HandleTypeDef *hcan, uint32_t fifo,
                                        CAN_RxHeaderTypeDef *header,
                                        uint8_t data[8])
 {
-    (void)hcan;
     (void)fifo;
-    (void)header;
-    (void)data;
-    return HAL_ERROR;
+    uint8_t index = can_index(hcan);
+    if (pending_rx[index] == 0U) return HAL_ERROR;
+    *header = pending_headers[index];
+    memcpy(data, pending_data[index], 8U);
+    pending_rx[index] = 0U;
+    return HAL_OK;
 }
 
 void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan);
 void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan);
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan);
 
 static const SentFrame_t *find_frame(uint16_t id)
 {
@@ -128,6 +159,36 @@ int main(void)
     can1.Instance = (void *)1;
     can2.Instance = (void *)2;
     assert(CanMotorBus_Init(&can1, &can2) == HAL_OK);
+    /* The configured filters must admit every deployed motor feedback ID. */
+    assert((configured_filters[0].FilterIdHigh == (0x202U << 5)) &&
+           (configured_filters[0].FilterIdLow == (0x203U << 5)) &&
+           (configured_filters[0].FilterMaskIdHigh == (0x206U << 5)) &&
+           (configured_filters[0].FilterMaskIdLow == (0x206U << 5)));
+    assert((configured_filters[1].FilterIdHigh == (0x205U << 5)) &&
+           (configured_filters[1].FilterIdLow == (0x301U << 5)) &&
+           (configured_filters[1].FilterMaskIdHigh == (0x205U << 5)) &&
+           (configured_filters[1].FilterMaskIdLow == (0x301U << 5)));
+
+    /* An accepted FIFO0 frame must reach its motor decoder through the ISR
+     * callback, rather than only being counted. */
+    {
+        const uint8_t dji_feedback[8] = {0x12U, 0x34U, 0x00U, 0x64U,
+                                         0x00U, 0x00U, 0x32U, 0U};
+        const uint8_t dm_feedback[8] = {0x01U, 0x23U, 0x00U, 0x64U,
+                                        0x00U, 0x32U, 0x28U, 0x29U};
+        fake_tick = 42U;
+        inject_rx(&can1, 0x206U, dji_feedback);
+        HAL_CAN_RxFifo0MsgPendingCallback(&can1);
+        inject_rx(&can2, 0x301U, dm_feedback);
+        HAL_CAN_RxFifo0MsgPendingCallback(&can2);
+        CanMotorBus_GetStatus(&status);
+        assert((status.can1_rx_count == 1U) && (status.can2_rx_count == 1U));
+        assert((can1_gm6020_id2.feedback.online != 0U) &&
+               (can1_gm6020_id2.feedback.last_update_ms == fake_tick));
+        assert((can2_dm4310_id1.online != 0U) &&
+               (can2_dm4310_id1.encoder == 0x123U) &&
+               (can2_dm4310_id1.speed_rpm == 1.0f));
+    }
 
     /* A DM4310 can need control keepalive frames before it resumes feedback.
      * Losing feedback must therefore send a zero-current 0x3FE frame, not
@@ -159,6 +220,7 @@ int main(void)
      * 同时强制 Yaw 使用精确的零命令，而不是运行其速度 PID。 */
     can1_gm6020_id2.feedback.online = 1U;
     can1_gm6020_id2.feedback.speed_rpm = 0;
+    can1_gm6020_id2.filtered_speed_rpm = 0.0f;
     MotorSpeedPid_Init(&can1_gm6020_id2.speed_pid,
                        10.0f, 0.0f, 30000.0f, 30000.0f);
     GM6020_SetSpeed(&can1_gm6020_id2, 10.0f);
@@ -167,17 +229,18 @@ int main(void)
                        2.0f, 0.0f, 1000.0f, 1000.0f);
     DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
     sent_count = 0U;
+    fake_tick += CAN_COMMAND_PERIOD_MS;
     assert(CanMotorBus_UpdateSelected(0.001f, 1U, 0U) == HAL_OK);
     /* GM6020 ID2 feedback uses 0x206.  Its voltage command belongs in
      * 0x1FF, with ID2 in bytes 2..3. */
     frame = find_frame(0x1FFU);
     assert(frame != 0);
-    assert((frame->data[2] == 0U) && (frame->data[3] == 100U));
+    assert((frame->data[2] == 0x1FU) && (frame->data[3] == 0x40U));
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
     assert(frame != 0);
     assert((frame->data[0] == 0U) && (frame->data[1] == 0U));
     CanMotorBus_GetStatus(&status);
-    assert((status.last_gm6020_id2_command == 100) &&
+    assert((status.last_gm6020_id2_command == 8000) &&
            (status.last_dm4310_id1_command == 0));
 
     /* CAN1 对 0x200（C620）和 0x1FF（GM6020）命令帧使用相同的非破坏性反压策略。 */
@@ -201,7 +264,10 @@ int main(void)
 
     fail_transmit = 1U;
     for (index = 0U; index < CAN_MOTOR_TX_FAILURE_LATCH_COUNT; ++index)
+    {
+        fake_tick += CAN_COMMAND_PERIOD_MS;
         assert(CanMotorBus_Update(0.001f) == HAL_ERROR);
+    }
     CanMotorBus_GetStatus(&status);
     assert((status.fault_latched != 0U) &&
            (CanMotorBus_TxHealthy() == 0U));

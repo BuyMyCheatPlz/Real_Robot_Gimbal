@@ -2,8 +2,9 @@
 #define TASK_CONFIG_H
 
 /* ---------------- 任务周期与安全保护 ---------------- */
-#define CONTROL_PERIOD_S                  0.001f
-#define CONTROL_PERIOD_TICKS              1U
+#define CONTROL_PERIOD_S                  0.004f
+#define CONTROL_PERIOD_TICKS              4U
+#define CAN_COMMAND_PERIOD_MS             10U
 #define DATA_PROCESS_PERIOD_MS            1U
 #define DBUS_TIMEOUT_MS                   100U
 #define REMOTE_COMMAND_TIMEOUT_MS         150U
@@ -86,6 +87,7 @@
 
 /* ---------------- Pitch：GM6020 外位置环 + 内速度环 ---------------- */
 #define PITCH_GM6020_CAN_ID                2U
+#define PITCH_GRAVITY_ONLY_ENABLE          1U
 #define PITCH_ANGLE_KP_RPM_PER_RAD        75.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
 #define PITCH_ANGLE_KD_RPM_S_PER_RAD      1.0f
@@ -102,9 +104,11 @@
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
 /* Positive feedforward counteracts gravity in the measured installation.
  * If bench testing shows it increases the downward pull, flip only this sign. */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         1200.0f
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         5000.0f
 #define PITCH_GRAVITY_ZERO_RAD            0.0f
-#define PITCH_GRAVITY_SIGN                1.0f
+#define PITCH_GRAVITY_ANGLE_MIN_DEG      (-24.34f)
+#define PITCH_GRAVITY_ANGLE_MAX_DEG       (49.58f)
+#define PITCH_GRAVITY_SIGN               -1.0f
 #define PITCH_MOTOR_SIGN                  1.0f
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
