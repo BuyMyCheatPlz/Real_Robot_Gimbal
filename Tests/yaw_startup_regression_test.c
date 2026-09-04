@@ -1,4 +1,5 @@
 #include "yaw_startup.h"
+#include "config.h"
 #include <assert.h>
 
 int main(void)
@@ -36,5 +37,37 @@ int main(void)
     YawStartup_Reset(&state);
     assert(state.ready == 0U);
     assert(state.have_feedback == 0U);
+
+    /* The DM4310 feedback stream can be slower than the 1 ms control task.
+     * A 20 ms control iteration between valid 40 ms feedback frames must not
+     * restart a genuinely stable startup window. */
+    {
+        const YawStartupConfig_t sparse_feedback_config = {
+            200U, YAW_STARTUP_MAX_FEEDBACK_AGE_MS, 0.50f, 0.0035f
+        };
+        YawStartup_Reset(&state);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2000U, 2000U, 1.0000f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2020U, 2000U, 1.0000f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2040U, 2040U, 1.0001f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2060U, 2040U, 1.0001f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2080U, 2080U, 1.0002f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2100U, 2080U, 1.0002f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2120U, 2120U, 1.0003f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2140U, 2120U, 1.0003f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2160U, 2160U, 1.0004f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2180U, 2160U, 1.0004f, 0.10f) == 0U);
+        assert(YawStartup_Update(&state, &sparse_feedback_config,
+                                 2200U, 2200U, 1.0005f, 0.10f) != 0U);
+    }
     return 0;
 }

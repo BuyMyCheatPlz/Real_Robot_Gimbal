@@ -119,11 +119,11 @@ static void publish_launch_parameters(const DBusData_t *remote,
     if (remote_ok != 0U)
     {
         update.flywheel_speed_rpm =
-            map_dbus_switch_speed(remote->channel[REMOTE_CH_S1_INDEX],
+            map_dbus_switch_speed(remote->channel[REMOTE_CH_S2_INDEX],
                                   LAUNCH_M3508_TARGET_MAX_SPEED_RPM,
                                   100.0f);
         update.feeder_speed_rpm =
-            map_dbus_switch_speed(remote->channel[REMOTE_CH_S2_INDEX],
+            map_dbus_switch_speed(remote->channel[REMOTE_CH_S1_INDEX],
                                   LAUNCH_M2006_ID5_MAX_SPEED_RPM,
                                   50.0f);
         if ((can1_m3508_id2.feedback.online != 0U) ||

@@ -96,6 +96,22 @@ static void pack_slot(uint8_t data[8], uint8_t slot, int16_t command)
     data[slot * 2U + 1U] = (uint8_t)command;
 }
 
+static uint16_t pack_gm6020_command(uint8_t data[8], uint8_t motor_id,
+                                     int16_t command)
+{
+    if ((motor_id >= 1U) && (motor_id <= 4U))
+    {
+        pack_slot(data, motor_id - 1U, command);
+        return 0x1FFU;
+    }
+    if ((motor_id >= 5U) && (motor_id <= 8U))
+    {
+        pack_slot(data, motor_id - 5U, command);
+        return 0x2FFU;
+    }
+    return 0U;
+}
+
 static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
                                        int16_t m3508_id3,
                                        int16_t gm6020_id2,
@@ -107,6 +123,7 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
     uint8_t can2_c610[8] = {0};
     uint8_t can2_dm[8] = {0};
     uint16_t dm_control_id;
+    uint16_t gm_control_id;
     HAL_StatusTypeDef status = HAL_OK;
     uint8_t failure_mask = 0U;
     uint8_t busy_mask = 0U;
@@ -125,16 +142,26 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
             pack_slot(can1_c620, 2U, m3508_id3);
             pack_slot(can2_c610, 0U, m2006_id5);
         }
-        pack_slot(can1_gm, 1U, gm6020_id2);
-    }
-    if (can2_dm4310_id1.online != 0U)
-    {
-        if (DM4310_PackCurrentCommand(&can2_dm4310_id1, dm4310_id1,
-                                      &dm_control_id, can2_dm) == 0U)
+        gm_control_id = pack_gm6020_command(can1_gm,
+                                             can1_gm6020_id2.id,
+                                             gm6020_id2);
+        if (gm_control_id == 0U)
         {
-            record_gimbal_commands(gm6020_id2, 0);
+            record_gimbal_commands(0, 0);
             return HAL_ERROR;
         }
+    }
+    /* Continue sending the DM4310 control ID while feedback is offline.  Some
+     * current-control firmware only resumes periodic feedback after receiving
+     * valid control traffic; silencing 0x3FE here would make an offline state
+     * self-perpetuating.  The offline frame is always exact zero current. */
+    if (DM4310_PackCurrentCommand(&can2_dm4310_id1,
+                                  (can2_dm4310_id1.online != 0U) ?
+                                  dm4310_id1 : 0,
+                                  &dm_control_id, can2_dm) == 0U)
+    {
+        record_gimbal_commands(gm6020_id2, 0);
+        return HAL_ERROR;
     }
 
     record_gimbal_commands((YAW_COMMISSIONING_MODE != 0U) ? 0 : gm6020_id2,
@@ -147,7 +174,7 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
     }
     if (YAW_COMMISSIONING_MODE == 0U)
     {
-        result = send_std(bus_can1, 0x1FFU, can1_gm);
+        result = send_std(bus_can1, gm_control_id, can1_gm);
         accumulate_send_result(result, 2U, &failure_mask, &busy_mask, &status);
     }
     if ((YAW_COMMISSIONING_MODE == 0U) &&
@@ -156,11 +183,8 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
         result = send_std(bus_can2, 0x1FFU, can2_c610);
         accumulate_send_result(result, 4U, &failure_mask, &busy_mask, &status);
     }
-    if (can2_dm4310_id1.online != 0U)
-    {
-        result = send_std(bus_can2, dm_control_id, can2_dm);
-        accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
-    }
+    result = send_std(bus_can2, dm_control_id, can2_dm);
+    accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
     record_tx_diagnostics(failure_mask, busy_mask);
     return status;
 }
@@ -291,7 +315,7 @@ HAL_StatusTypeDef CanMotorBus_Init(CAN_HandleTypeDef *can1,
     /* 驱动层增益保持为零，任务启动后再加载 config.h 中的实车参数。 */
     M3508_Init(&can1_m3508_id2, 2U, 0.0f, 0.0f);
     M3508_Init(&can1_m3508_id3, 3U, 0.0f, 0.0f);
-    GM6020_Init(&can1_gm6020_id2, 2U, 0.0f, 0.0f);
+    GM6020_Init(&can1_gm6020_id2, PITCH_GM6020_CAN_ID, 0.0f, 0.0f);
     M2006_Init(&can2_m2006_id5, 5U, 0.0f, 0.0f);
     DM4310_Init(&can2_dm4310_id1, 1U, 0.0f, 0.0f);
 

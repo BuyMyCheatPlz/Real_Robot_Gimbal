@@ -129,6 +129,15 @@ int main(void)
     can2.Instance = (void *)2;
     assert(CanMotorBus_Init(&can1, &can2) == HAL_OK);
 
+    /* A DM4310 can need control keepalive frames before it resumes feedback.
+     * Losing feedback must therefore send a zero-current 0x3FE frame, not
+     * silence the motor bus and make the offline state self-perpetuating. */
+    sent_count = 0U;
+    assert(CanMotorBus_StopGimbal(0.001f) == HAL_OK);
+    frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
+    assert(frame != 0);
+    assert((frame->data[0] == 0U) && (frame->data[1] == 0U));
+
     can2_dm4310_id1.online = 1U;
     sent_count = 0U;
     assert(CanMotorBus_SendYawTestCurrent(100) == HAL_OK);
@@ -140,11 +149,11 @@ int main(void)
     assert((frame->data[0] == 0U) && (frame->data[7] == 0U));
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
     assert(frame != 0);
-    assert((frame->data[0] == 20U) && (frame->data[1] == 0U));
+    assert((frame->data[0] == 100U) && (frame->data[1] == 0U));
     HAL_CAN_TxMailbox0CompleteCallback(&can2);
     CanMotorBus_GetStatus(&status);
     assert(status.can2_tx_complete_count == 1U);
-    assert(status.last_dm4310_id1_command == 20);
+    assert(status.last_dm4310_id1_command == 100);
 
     /* Yaw 启动稳定过程不能抑制健康的 Pitch 回路。共享 CAN 发布器会发送 Pitch，
      * 同时强制 Yaw 使用精确的零命令，而不是运行其速度 PID。 */
@@ -159,6 +168,8 @@ int main(void)
     DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
     sent_count = 0U;
     assert(CanMotorBus_UpdateSelected(0.001f, 1U, 0U) == HAL_OK);
+    /* GM6020 ID2 feedback uses 0x206.  Its voltage command belongs in
+     * 0x1FF, with ID2 in bytes 2..3. */
     frame = find_frame(0x1FFU);
     assert(frame != 0);
     assert((frame->data[2] == 0U) && (frame->data[3] == 100U));

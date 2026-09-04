@@ -25,10 +25,11 @@ int main(void)
     GM6020_SetSpeed(&pitch, pitch_speed_target);
     pitch_command = GM6020_Update(&pitch, CONTROL_PERIOD_S);
 
-    /* A normal 10 degree startup error must produce useful authority.  The
-     * commissioning values generated only about 35/30000 command counts and
-     * could neither lift nor hold the Pitch assembly. */
-    assert(abs(pitch_command) >= 1000);
+    /* A 10 degree Pitch error must overcome the loaded gimbal's static
+     * friction; gravity itself is handled by the separate feedforward below. */
+    assert(abs(pitch_command) >= 800);
+    assert(abs(pitch_command) <= 1000);
+    assert(PITCH_GRAVITY_FF_MAX_VOLTAGE >= 1000.0f);
 
     DM4310_Init(&yaw, 1U, YAW_SPEED_KP_CURRENT_PER_RPM,
                 YAW_SPEED_KI_CURRENT_PER_RPM_S);
@@ -42,7 +43,13 @@ int main(void)
 
     /* After correcting the DM4310 command slots to little-endian, 20 is sent
      * as 14 00 and no longer becomes the byte-swapped value 5120. */
-       assert(abs(yaw_command) <= 1000);
+    assert(abs(yaw_command) <= 1000);
+    /* A large yaw error must request enough speed/current to overcome the
+     * measured static friction; the former 0.08 rad/s trajectory and 1.0
+     * current/rpm path produced only about 5 current counts. */
+    assert(YAW_MAX_SPEED_RAD_S >= 0.5f);
+    assert(YAW_TRAJECTORY_MAX_SPEED_RAD_S >= 0.4f);
+    assert(YAW_SPEED_KP_CURRENT_PER_RPM >= 20.0f);
        assert(YAW_DIRECTION_TEST_MAX_CURRENT <= 1000);
        assert(DM4310_CURRENT_COMMAND_LIMIT <= 1000.0f);
     assert((YAW_VELOCITY_FF_GAIN > 0.0f) &&

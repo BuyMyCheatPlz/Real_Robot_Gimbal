@@ -138,6 +138,9 @@ void HAL_Delay(uint32_t delay_ms);
 HAL_StatusTypeDef HAL_UARTEx_ReceiveToIdle_DMA(UART_HandleTypeDef *huart,
                                                uint8_t *data,
                                                uint16_t length);
+HAL_StatusTypeDef HAL_UART_Transmit_DMA(UART_HandleTypeDef *huart,
+                                        const uint8_t *data,
+                                        uint16_t length);
 HAL_StatusTypeDef HAL_UART_AbortReceive(UART_HandleTypeDef *huart);
 
 #endif

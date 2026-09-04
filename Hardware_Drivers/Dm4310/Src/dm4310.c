@@ -1,4 +1,5 @@
 #include "dm4310.h"
+#include <math.h>
 #include <string.h>
 
 #define TWO_PI_F 6.2831853071795864769f
@@ -105,6 +106,12 @@ int16_t DM4310_Update(DM4310_t *motor, float dt_s)
     if (output_limit < 0.0f) output_limit = 0.0f;
     if (output > output_limit) output = output_limit;
     if (output < -output_limit) output = -output_limit;
+    if (fabsf(motor->target_speed_rpm) >= YAW_STARTUP_SPEED_THRESHOLD_RPM &&
+        fabsf(output) < YAW_STARTUP_MIN_CURRENT)
+    {
+        output = (motor->target_speed_rpm > 0.0f) ?
+            YAW_STARTUP_MIN_CURRENT : -YAW_STARTUP_MIN_CURRENT;
+    }
 
     /* 误差扩散可在多帧之间保留不足一个计数的 PID/前馈输出，避免出现较大死区，
      * 同时保证每一帧电流命令都处于硬件安全限幅内。 */

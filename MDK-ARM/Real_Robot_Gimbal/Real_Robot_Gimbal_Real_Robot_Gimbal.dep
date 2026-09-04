@@ -42,7 +42,7 @@ I (../Core/Inc/usart.h)(0x6A9659CD)
 I (../Hardware_Drivers/Can/Inc/can_motor_bus.h)(0x6A994F9F)
 I (../Hardware_Drivers/m3508+c620/Inc/m3508.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (../Hardware_Drivers/m2006+c610/Inc/m2006.h)(0x6A99750B)
 I (../Hardware_Drivers/Gm6020/Inc/gm6020.h)(0x6A969280)
 I (../Hardware_Drivers/Dm4310/Inc/dm4310.h)(0x6A9976AF)
@@ -51,7 +51,7 @@ I (../Core/Inc/spi.h)(0x6A964261)
 F (../Hardware_Drivers/Can/Src/motor_common.c)(0x6A9976AF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\motor_common.o --omf_browse real_robot_gimbal\motor_common.crf --depend real_robot_gimbal\motor_common.d)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
-F (../Hardware_Drivers/Can/Src/can_motor_bus.c)(0x6A9976AF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\can_motor_bus.o --omf_browse real_robot_gimbal\can_motor_bus.crf --depend real_robot_gimbal\can_motor_bus.d)
+F (../Hardware_Drivers/Can/Src/can_motor_bus.c)(0x6A9A977F)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\can_motor_bus.o --omf_browse real_robot_gimbal\can_motor_bus.crf --depend real_robot_gimbal\can_motor_bus.d)
 I (../Hardware_Drivers/Can/Inc/can_motor_bus.h)(0x6A994F9F)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x6A603FAA)
 I (../Core/Inc/stm32f4xx_hal_conf.h)(0x6A964262)
@@ -87,7 +87,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x6A603FAA)
 I (../Hardware_Drivers/m3508+c620/Inc/m3508.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (../Hardware_Drivers/m2006+c610/Inc/m2006.h)(0x6A99750B)
 I (../Hardware_Drivers/Gm6020/Inc/gm6020.h)(0x6A969280)
 I (../Hardware_Drivers/Dm4310/Inc/dm4310.h)(0x6A9976AF)
@@ -96,24 +96,27 @@ F (../Hardware_Drivers/m3508+c620/Src/m3508.c)(0x6A969285)(--c99 -c --cpu Cortex
 I (../Hardware_Drivers/m3508+c620/Inc/m3508.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
 F (../Hardware_Drivers/m2006+c610/Src/m2006.c)(0x6A969287)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\m2006.o --omf_browse real_robot_gimbal\m2006.crf --depend real_robot_gimbal\m2006.d)
 I (../Hardware_Drivers/m2006+c610/Inc/m2006.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
-F (../Hardware_Drivers/Gm6020/Src/gm6020.c)(0x6A969282)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\gm6020.o --omf_browse real_robot_gimbal\gm6020.crf --depend real_robot_gimbal\gm6020.d)
+F (../Hardware_Drivers/Gm6020/Src/gm6020.c)(0x6A9AA69A)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\gm6020.o --omf_browse real_robot_gimbal\gm6020.crf --depend real_robot_gimbal\gm6020.d)
 I (../Hardware_Drivers/Gm6020/Inc/gm6020.h)(0x6A969280)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
+I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\math.h)(0x5E8E3CC2)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
-F (../Hardware_Drivers/Dm4310/Src/dm4310.c)(0x6A9976AF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\dm4310.o --omf_browse real_robot_gimbal\dm4310.crf --depend real_robot_gimbal\dm4310.d)
+F (../Hardware_Drivers/Dm4310/Src/dm4310.c)(0x6A9AA69A)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\dm4310.o --omf_browse real_robot_gimbal\dm4310.crf --depend real_robot_gimbal\dm4310.d)
 I (../Hardware_Drivers/Dm4310/Inc/dm4310.h)(0x6A9976AF)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
+I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\math.h)(0x5E8E3CC2)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
 F (../Hardware_Drivers/Remote_Ctrl/Src/dbus.c)(0x6A9816AC)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\dbus.o --omf_browse real_robot_gimbal\dbus.crf --depend real_robot_gimbal\dbus.d)
 I (../Hardware_Drivers/Remote_Ctrl/Inc/dbus.h)(0x6A981517)
@@ -186,12 +189,12 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x6A603FAA)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
-F (../Tasks/Inc/config.h)(0x6A9976AF)()
+F (../Tasks/Inc/config.h)(0x6A9AA9EE)()
 F (../Tasks/Inc/pid_parameter.h)(0x6A991153)()
 F (../Tasks/Inc/yaw_hold.h)(0x6A9910E9)()
 F (../Tasks/Inc/yaw_startup.h)(0x6A994DD1)()
-F (../Tasks/Src/data_process.c)(0x6A9976AF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\data_process.o --omf_browse real_robot_gimbal\data_process.crf --depend real_robot_gimbal\data_process.d)
-I (../Tasks/Inc/gimbal_control.h)(0x6A9976AF)
+F (../Tasks/Src/data_process.c)(0x6A9AA9EE)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\data_process.o --omf_browse real_robot_gimbal\data_process.crf --depend real_robot_gimbal\data_process.d)
+I (../Tasks/Inc/gimbal_control.h)(0x6A9A914E)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h)(0x6A603EF7)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stddef.h)(0x5E8E3CC2)
@@ -230,7 +233,7 @@ I (../Hardware_Drivers/Bmi088/Inc/bmi088.h)(0x6A96F045)
 I (../Hardware_Drivers/Can/Inc/can_motor_bus.h)(0x6A994F9F)
 I (../Hardware_Drivers/m3508+c620/Inc/m3508.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (../Hardware_Drivers/m2006+c610/Inc/m2006.h)(0x6A99750B)
 I (../Hardware_Drivers/Gm6020/Inc/gm6020.h)(0x6A969280)
 I (../Hardware_Drivers/Dm4310/Inc/dm4310.h)(0x6A9976AF)
@@ -242,14 +245,14 @@ I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x5E8E
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
 F (../Tasks/Src/pid_parameter.c)(0x6A991156)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\pid_parameter.o --omf_browse real_robot_gimbal\pid_parameter.crf --depend real_robot_gimbal\pid_parameter.d)
 I (../Tasks/Inc/pid_parameter.h)(0x6A991153)
-I (../Tasks/Inc/gimbal_control.h)(0x6A9976AF)
+I (../Tasks/Inc/gimbal_control.h)(0x6A9A914E)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\math.h)(0x5E8E3CC2)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x5E8E3CC2)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
-F (../Tasks/Src/pid_calc.c)(0x6A9976AF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\pid_calc.o --omf_browse real_robot_gimbal\pid_calc.crf --depend real_robot_gimbal\pid_calc.d)
-I (../Tasks/Inc/gimbal_control.h)(0x6A9976AF)
+F (../Tasks/Src/pid_calc.c)(0x6A9AA69A)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\pid_calc.o --omf_browse real_robot_gimbal\pid_calc.crf --depend real_robot_gimbal\pid_calc.d)
+I (../Tasks/Inc/gimbal_control.h)(0x6A9A914E)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h)(0x6A603EF7)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stddef.h)(0x5E8E3CC2)
@@ -286,7 +289,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x6A603FAA)
 I (../Hardware_Drivers/m3508+c620/Inc/m3508.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (../Hardware_Drivers/m2006+c610/Inc/m2006.h)(0x6A99750B)
 I (../Hardware_Drivers/Gm6020/Inc/gm6020.h)(0x6A969280)
 I (../Hardware_Drivers/Dm4310/Inc/dm4310.h)(0x6A9976AF)
@@ -303,7 +306,7 @@ I (../Tasks/Inc/yaw_startup.h)(0x6A994DD1)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\math.h)(0x5E8E3CC2)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
-F (../Tasks/Src/vofa.c)(0x6A9976AF)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\vofa.o --omf_browse real_robot_gimbal\vofa.crf --depend real_robot_gimbal\vofa.d)
+F (../Tasks/Src/vofa.c)(0x6A9AA69A)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\vofa.o --omf_browse real_robot_gimbal\vofa.crf --depend real_robot_gimbal\vofa.d)
 I (../Tasks/Inc/vofa.h)(0x6A996999)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h)(0x6A603FAA)
 I (../Core/Inc/stm32f4xx_hal_conf.h)(0x6A964262)
@@ -337,14 +340,14 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x6A603FAA)
-I (../Tasks/Inc/gimbal_control.h)(0x6A9976AF)
+I (../Tasks/Inc/gimbal_control.h)(0x6A9A914E)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h)(0x6A603EF7)
 I (../Core/Inc/usart.h)(0x6A9659CD)
 I (../Core/Inc/main.h)(0x6A9685C0)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\string.h)(0x5E8E3CC2)
 F (../Tasks/Src/launch.c)(0x6A982E1C)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\launch.o --omf_browse real_robot_gimbal\launch.crf --depend real_robot_gimbal\launch.d)
-I (../Tasks/Inc/gimbal_control.h)(0x6A9976AF)
+I (../Tasks/Inc/gimbal_control.h)(0x6A9A914E)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stdint.h)(0x5E8E3CC2)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h)(0x6A603EF7)
 I (D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\include\stddef.h)(0x5E8E3CC2)
@@ -381,7 +384,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x6A603FAA)
 I (../Hardware_Drivers/m3508+c620/Inc/m3508.h)(0x6A99750B)
 I (../Hardware_Drivers/Can/Inc/motor_common.h)(0x6A9976AF)
-I (../Tasks/Inc/config.h)(0x6A9976AF)
+I (../Tasks/Inc/config.h)(0x6A9AA9EE)
 I (../Hardware_Drivers/m2006+c610/Inc/m2006.h)(0x6A99750B)
 I (../Hardware_Drivers/Gm6020/Inc/gm6020.h)(0x6A969280)
 I (../Hardware_Drivers/Dm4310/Inc/dm4310.h)(0x6A9976AF)
@@ -517,7 +520,7 @@ I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h)(0x6A603FAA)
 I (../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h)(0x6A603FAA)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h)(0x6A603EF7)
 I (../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h)(0x6A603EF7)
-I (../Tasks/Inc/gimbal_control.h)(0x6A9976AF)
+I (../Tasks/Inc/gimbal_control.h)(0x6A9A914E)
 F (../Core/Src/can.c)(0x6A98F1A4)(--c99 -c --cpu Cortex-M4.fp.sp -g -O3 --apcs=interwork --split_sections -I ../Core/Inc -I ../Tasks/Inc -I ../Hardware_Drivers/Inc -I ../Hardware_Drivers/Can/Inc -I ../Hardware_Drivers/m3508+c620/Inc -I ../Hardware_Drivers/m2006+c610/Inc -I ../Hardware_Drivers/Gm6020/Inc -I ../Hardware_Drivers/Dm4310/Inc -I ../Hardware_Drivers/Remote_Ctrl/Inc -I ../Hardware_Drivers/Bmi088/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc -I ../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I ../Middlewares/Third_Party/FreeRTOS/Source/include -I ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2 -I ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F -I ../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I ../Drivers/CMSIS/Include-I.\RTE\_Real_Robot_Gimbal-I"D:\Users\Enjory Wong\AppData\Local\Arm\Packs\ARM\CMSIS\6.3.0\CMSIS\Core\Include"-D__UVISION_VERSION="543" -DSTM32F405xx -D_RTE_ -DUSE_HAL_DRIVER -DSTM32F405xx-o real_robot_gimbal\can.o --omf_browse real_robot_gimbal\can.crf --depend real_robot_gimbal\can.d)
 I (../Core/Inc/can.h)(0x6A964261)
 I (../Core/Inc/main.h)(0x6A9685C0)

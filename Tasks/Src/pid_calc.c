@@ -444,8 +444,8 @@ void PID_calc(void *argument)
             int16_t yaw_test_current = yaw_test_current_get(now_ms,
                                                               &yaw_test_active);
             uint8_t common_control_permitted = (uint8_t)(
-                (imu_fresh != 0U) && (remote_fresh != 0U) &&
-                (can_healthy != 0U) && (overrun_pending == 0U));
+                (imu_fresh != 0U) && (can_healthy != 0U) &&
+                (overrun_pending == 0U));
             uint8_t pitch_control_permitted = (uint8_t)(
                 (common_control_permitted != 0U) &&
                 (YAW_COMMISSIONING_MODE == 0U) &&
@@ -457,6 +457,8 @@ void PID_calc(void *argument)
             uint32_t control_inhibit_flags = 0U;
             HAL_StatusTypeDef motor_status = HAL_ERROR;
             CanMotorBusStatus_t bus_status;
+            float pitch_speed_target_rpm = 0.0f;
+            float yaw_speed_target_rad_s = 0.0f;
             float yaw_velocity_feedforward = 0.0f;
             float yaw_acceleration_feedforward = 0.0f;
 
@@ -548,7 +550,8 @@ void PID_calc(void *argument)
                 if (pitch_target < pitch_home - PITCH_SOFT_LIMIT_RAD)
                     pitch_target = pitch_home - PITCH_SOFT_LIMIT_RAD;
             }
-            if (yaw_target_initialized != 0U)
+            if ((yaw_target_initialized != 0U) &&
+                (YAW_SOFT_LIMIT_DEG > 0.0f))
             {
                 if (yaw_target > yaw_home + YAW_SOFT_LIMIT_RAD)
                     yaw_target = yaw_home + YAW_SOFT_LIMIT_RAD;
@@ -556,7 +559,7 @@ void PID_calc(void *argument)
                     yaw_target = yaw_home - YAW_SOFT_LIMIT_RAD;
             }
 
-            if ((yaw_test_active != 0U) && (remote_fresh != 0U) &&
+            if ((yaw_test_active != 0U) &&
                 (can2_dm4310_id1.online != 0U) && (can_healthy != 0U) &&
                 (YAW_CLOSED_LOOP_ENABLE == 0U))
             {
@@ -574,7 +577,6 @@ void PID_calc(void *argument)
                 if (yaw_target_initialized != 0U)
                 {
                     float yaw_feedback;
-                    float yaw_speed_target_rad_s;
                     yaw_trajectory_step(&yaw_profile_target, &yaw_profile_speed,
                                         &yaw_profile_acceleration, yaw_target,
                                         YAW_TRAJECTORY_MAX_SPEED_RAD_S,
@@ -628,7 +630,7 @@ void PID_calc(void *argument)
                 }
                 if (pitch_target_initialized != 0U)
                 {
-                    float pitch_speed_target = position_pid(
+                    pitch_speed_target_rpm = position_pid(
                         &pitch_angle_pid, pitch_target, pitch_angle_actual,
                         control_dt_s);
                     gravity_feedforward = PITCH_GRAVITY_SIGN *
@@ -637,7 +639,7 @@ void PID_calc(void *argument)
                     GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
                         PITCH_MOTOR_SIGN * gravity_feedforward);
                     GM6020_SetSpeed(&can1_gm6020_id2,
-                                   PITCH_MOTOR_SIGN * pitch_speed_target);
+                                   PITCH_MOTOR_SIGN * pitch_speed_target_rpm);
                 }
                 motor_status = CanMotorBus_UpdateSelected(
                     control_dt_s, pitch_target_initialized,
@@ -736,12 +738,19 @@ void PID_calc(void *argument)
                 (yaw_target_initialized != 0U));
             gimbal_control_state.yaw_trajectory_speed_rad_s =
                 yaw_profile_speed;
+            gimbal_control_state.yaw_profile_target_rad =
+                (yaw_target_initialized != 0U) ? yaw_profile_target :
+                yaw_angle_filtered;
+            gimbal_control_state.yaw_speed_target_rad_s =
+                yaw_speed_target_rad_s;
             gimbal_control_state.yaw_velocity_feedforward_rad_s =
                 (yaw_target_initialized != 0U) ?
                 yaw_velocity_feedforward : 0.0f;
             gimbal_control_state.yaw_acceleration_feedforward_current =
                 (yaw_target_initialized != 0U) ?
                 yaw_acceleration_feedforward : 0.0f;
+            gimbal_control_state.pitch_speed_target_rpm =
+                pitch_speed_target_rpm;
         }
 
         gimbal_control_state.pitch_target_rad = pitch_target;

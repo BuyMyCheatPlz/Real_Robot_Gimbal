@@ -153,34 +153,26 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        /* 闭环诊断通道同时保留目标和实际位置，便于将小命令归因于位置误差或
-         * 速度反馈噪声。 */
-        channels[0] = snapshot.yaw_target_rad * 57.295779513082320876f;
-        channels[1] = (float)snapshot.yaw_can_command;
-        channels[2] = (float)snapshot.yaw_encoder_count;
-        channels[3] = snapshot.yaw_motor_speed_rpm;
-        channels[4] = (float)snapshot.yaw_torque_current_ma;
-        channels[5] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
-        channels[6] = snapshot.yaw_imu_actual_rad * 57.295779513082320876f;
-        channels[7] = (float)snapshot.yaw_hold_active;
-        channels[8] = (float)(snapshot.dm4310_feedback_count % 1000000U);
-        /* 目标/实际诊断通道的固定签名。 */
-        channels[9] = 4313.0f;
-        /* YAWTEST 期间该值必须递增，用于证明 CAN2 已接受并完成发送命令帧，而不只是
-         * 收到了电机反馈。 */
-        channels[10] = (float)(snapshot.can2_tx_complete_count % 1000000U);
+        /* Pitch GM6020 diagnostics: target, feedback, PID output and health. */
+        channels[0] = snapshot.pitch_target_rad * 57.295779513082320876f;
+        channels[1] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
+        channels[2] = (snapshot.pitch_target_rad - snapshot.pitch_encoder_rad) *
+                      57.295779513082320876f;
+        channels[3] = snapshot.pitch_speed_target_rpm;
+        channels[4] = snapshot.pitch_speed_rpm;
+        channels[5] = (float)snapshot.pitch_can_command;
+        channels[6] = snapshot.gravity_feedforward;
+        channels[7] = (float)snapshot.can1_gm6020_id2_online;
+        channels[8] = snapshot.imu_pitch_rad * 57.295779513082320876f;
+        channels[9] = (float)snapshot.active;
+        channels[10] = (float)snapshot.feedback_healthy;
         channels[11] = (float)snapshot.control_inhibit_flags;
-        channels[12] = snapshot.pitch_target_rad * 57.295779513082320876f;
-        channels[13] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
-        channels[14] = snapshot.pitch_speed_rpm;
-        channels[15] = (float)snapshot.pitch_can_command;
-        /* 仅在发送 Yaw 命令时输出，包括有界方向测试或启用的闭环控制；空闲时仍保持
-         * UART 接收有效。 */
-        if ((snapshot.yaw_test_active != 0U) || (snapshot.active != 0U))
-        {
-            (void)VOFA_SendControlFrame(channels);
-            ++vofa_heartbeat;
-        }
+        channels[12] = (float)snapshot.can_last_send_failure_mask;
+        channels[13] = (float)snapshot.can1_tx_free_level;
+        channels[14] = (float)snapshot.can_tx_failure_count;
+        channels[15] = (float)snapshot.can1_m3508_id2_online;
+        (void)VOFA_SendControlFrame(channels);
+        ++vofa_heartbeat;
         wake_tick += VOFA_PERIOD_MS;
         if (osDelayUntil(wake_tick) != osOK)
             wake_tick = osKernelGetTickCount();

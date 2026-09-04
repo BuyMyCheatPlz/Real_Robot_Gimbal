@@ -12,7 +12,8 @@ enum
     GIMBAL_MSG_REMOTE_BAD  = (1U << 4)
 };
 
-/* 通过 VOFA 输出的位掩码。非零值表示云台控制任务正在主动发送零输出。 */
+/* 通过 VOFA 输出的诊断位掩码。远控超时只禁止新的遥控增量；已有云台目标仍可在
+ * IMU、CAN 与对应电机反馈健康时继续保持。 */
 enum
 {
     GIMBAL_INHIBIT_PITCH_OFFLINE = (1U << 0),
@@ -79,9 +80,12 @@ typedef struct
     float pitch_encoder_rad;
     float yaw_encoder_rad;
     float yaw_imu_actual_rad;
+    float pitch_speed_target_rpm;
     float pitch_speed_rpm;
     float yaw_speed_rad_s;
     float gravity_feedforward;
+    float yaw_profile_target_rad;
+    float yaw_speed_target_rad_s;
     float yaw_trajectory_speed_rad_s;
     float yaw_velocity_feedforward_rad_s;
     float yaw_acceleration_feedforward_current;
