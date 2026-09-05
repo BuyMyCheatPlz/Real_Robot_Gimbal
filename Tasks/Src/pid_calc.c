@@ -673,6 +673,7 @@ void PID_calc(void *argument)
                 can2_dm4310_id1.current_quantization_error = 0.0f;
                 can2_dm4310_id1.direct_current_en = 1U;
                 can2_dm4310_id1.direct_current = sysid_command;
+                DM4310_SetCurrentFeedforward(&can2_dm4310_id1, 0);  /* 辨识：禁止电流前馈 */
                 YawHold_Reset(&yaw_hold_state);
                 yaw_profile_speed = 0.0f;
                 yaw_profile_acceleration = 0.0f;

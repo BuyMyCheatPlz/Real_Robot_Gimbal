@@ -17,6 +17,8 @@ static uint8_t command_send_initialized;
 static volatile uint8_t can1_recovery_pending;
 static volatile uint8_t can2_recovery_pending;
 static volatile uint8_t can_service_busy;
+static volatile uint32_t can1_busy_since_ms;
+static volatile uint32_t can2_busy_since_ms;
 
 #define GM6020_FEEDBACK_BASE_ID 0x204U
 
@@ -85,6 +87,35 @@ static uint8_t tx_capacity_available(CAN_HandleTypeDef *hcan,
 {
     return (uint8_t)(HAL_CAN_GetTxMailboxesFreeLevel(hcan) >=
                      required_mailboxes);
+}
+
+/* 若一条总线连续多拍因"邮箱已满/帧未完成"被跳过，说明有发送请求卡死在邮箱里
+ * (典型的未 ACK 帧)。此时必须中止该总线全部邮箱把它们释放，否则 capacity 判断
+ * 会永久跳过这条总线：CAN1 因需要 2 个空邮箱而整条停发，CAN2 里 M2006(需 2 个)
+ * 被饿死、只剩 DM4310(只需 1 个)存活。 */
+static void recover_stuck_tx_mailboxes(CAN_HandleTypeDef *hcan,
+                                       volatile uint32_t *busy_since_ms,
+                                       uint8_t busy_now)
+{
+    uint32_t now;
+    if ((hcan == 0) || (busy_since_ms == 0)) return;
+    now = HAL_GetTick();
+    if (busy_now == 0U)
+    {
+        *busy_since_ms = 0U;
+        return;
+    }
+    if (*busy_since_ms == 0U)
+    {
+        *busy_since_ms = now;
+        return;
+    }
+    if ((now - *busy_since_ms) >= CAN_TX_STUCK_ABORT_MS)
+    {
+        (void)HAL_CAN_AbortTxRequest(hcan, CAN_TX_MAILBOX0 |
+                                     CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
+        *busy_since_ms = now;
+    }
 }
 
 static void accumulate_send_result(HAL_StatusTypeDef result, uint8_t bit,
@@ -214,8 +245,7 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
                                    &status);
         }
     }
-    if ((YAW_COMMISSIONING_MODE == 0U) &&
-        (can2_m2006_id5.feedback.online != 0U))
+    if (YAW_COMMISSIONING_MODE == 0U)
     {
         if ((busy_mask & 0x0CU) == 0U)
         {
@@ -229,6 +259,11 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
         result = send_std(bus_can2, dm_control_id, can2_dm);
         accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
     }
+    /* 卡死邮箱自动释放：连续被 busy 跳过则中止该总线邮箱，防止整条总线永久失联 */
+    recover_stuck_tx_mailboxes(bus_can1, &can1_busy_since_ms,
+                               (uint8_t)((busy_mask & 0x03U) != 0U));
+    recover_stuck_tx_mailboxes(bus_can2, &can2_busy_since_ms,
+                               (uint8_t)((busy_mask & 0x0CU) != 0U));
     record_tx_diagnostics(failure_mask, busy_mask);
     return status;
 }

@@ -5,6 +5,7 @@
 #define CONTROL_PERIOD_S                  0.004f
 #define CONTROL_PERIOD_TICKS              4U
 #define CAN_COMMAND_PERIOD_MS             10U
+#define CAN_TX_STUCK_ABORT_MS             20U   /* 邮箱被未ACK帧卡住超过此时长则中止释放 */
 #define DATA_PROCESS_PERIOD_MS            1U
 #define DBUS_TIMEOUT_MS                   100U
 #define REMOTE_COMMAND_TIMEOUT_MS         150U
@@ -56,8 +57,8 @@
 /* ---------------- 云台反馈低通滤波 ---------------- */
 #define PITCH_ENCODER_LPF_ALPHA           0.15f
 #define PITCH_SPEED_LPF_ALPHA             0.20f
-#define YAW_ENCODER_LPF_ALPHA             0.15f
-#define YAW_SPEED_LPF_ALPHA               0.20f
+#define YAW_ENCODER_LPF_ALPHA             0.40f   /* 位置反馈滞后↓(30°快移用) */
+#define YAW_SPEED_LPF_ALPHA               0.50f   /* 速度反馈滞后↓(30°快移用) */
 /* IMU Yaw 是当前的位置环测量值。进入位置 PID 前先滤波；电机编码器仍作为
  * 内层速度反馈来源。 */
 #define YAW_IMU_POSITION_LPF_ALPHA         0.02f
@@ -112,24 +113,32 @@
 #define PITCH_MOTOR_SIGN                  1.0f
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
-/* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ---------------- */
-#define YAW_ANGLE_KP_RAD_S_PER_RAD        1.20f
+/* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
+ * 30° 阶跃(≤200ms、超调≤0.2°)整定组。依据辨识：电流→速度≈积分器(自由轴)，
+ * 速度环 P 即稳定；轨迹(高速/大加速度)+ 速度/加速度前馈负责 200ms 快速到位，
+ * 位置环做末端修正与防超调。
+ * 现场微调方向：
+ *  超调>0.2°      → 减 YAW_VELOCITY_FF_GAIN / 加 YAW_ANGLE_KD /
+ *                   减 YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2
+ *  到位偏慢/滞后大 → 加 YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2(先看电流是否顶到
+ *                   16384，若顶到则只能降 YAW_TRAJECTORY_MAX_ACCEL_RAD_S2 放慢)
+ *  末端小抖/噪声   → 略降 YAW_SPEED_KP 或回调滤波 alpha。 */
+#define YAW_ANGLE_KP_RAD_S_PER_RAD        2.00f
 #define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.02f
-#define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.0f
+#define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.10f
 #define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    0.04f
-#define YAW_MAX_SPEED_RAD_S               1.50f
+#define YAW_MAX_SPEED_RAD_S               7.0f
 /* Yaw 目标轨迹，轨迹单位为输出轴弧度。 */
-#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    1.00f
-#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   3.00f
-/* 0：关闭速度前馈；1：直接使用规划速度。 */
-#define YAW_VELOCITY_FF_GAIN              0.90f
+#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    6.5f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   120.0f
+/* 1.0：直接使用规划速度做速度前馈。 */
+#define YAW_VELOCITY_FF_GAIN              1.00f
 /* 可直接调节的力矩前馈：单位为 CAN 电流命令单位/输出轴 rad/s²。
- * PID 环稳定前应保持较小。正值表示输出轴正加速度，控制器会应用
- * YAW_MOTOR_COMMAND_SIGN。 */
-#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 20.0f
+ * 正值表示输出轴正加速度，控制器会应用 YAW_MOTOR_COMMAND_SIGN。 */
+#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 65.0f
 #define YAW_ACCELERATION_FF_CURRENT_LIMIT  16384.0f
-#define YAW_SPEED_KP_CURRENT_PER_RPM       80.0f
-#define YAW_SPEED_KI_CURRENT_PER_RPM_S      5.0f
+#define YAW_SPEED_KP_CURRENT_PER_RPM       180.0f
+#define YAW_SPEED_KI_CURRENT_PER_RPM_S     15.0f
 #define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
 #define YAW_SPEED_INTEGRAL_LIMIT_CURRENT  16384.0f
 /* 克服 DM4310 与机构静摩擦的最小启动电流；目标速度为零时不生效。 */
@@ -211,11 +220,14 @@
  * (I6=给 DM4310 的电流指令，I7=yaw 原始速度 rpm 不滤波)，运行
  * YAW_SYSID_DURATION_MS 后自动停止打印与激励，可重复触发。
  * 扫频频率随时间线性：f(t)=FREQ_START+(FREQ_END-FREQ_START)*t/时长。
- * 幅值上限 = YAW_CURRENT_OUTPUT_LIMIT(16384, DM4310 协议上限)。 */
-#define YAW_SYSID_MODE                    1U
+ * 幅值上限 = YAW_CURRENT_OUTPUT_LIMIT(16384, DM4310 协议上限)。
+ * 实测：>~15Hz 后速度反馈与指令失去相关(±40rpm 抖动)属无效段；
+ * 上限取 10Hz 可让全程数据都有效到最后一个采样点。若需更高频段，
+ * 适当上调 FREQ_END_HZ 或降低幅值。 */
+#define YAW_SYSID_MODE                    0U
 #define YAW_SYSID_AMPLITUDE_CURRENT       8000.0f   /* 扫频幅值(≤16384) */
 #define YAW_SYSID_FREQ_START_HZ           1.0f      /* 起始频率 */
-#define YAW_SYSID_FREQ_END_HZ             20.0f     /* 结束频率(线性扫频) */
+#define YAW_SYSID_FREQ_END_HZ             10.0f     /* 结束频率(线性扫频,≤10Hz 数据有效) */
 #define YAW_SYSID_DURATION_MS             20000U    /* 单次辨识时长 */
 
 #endif
