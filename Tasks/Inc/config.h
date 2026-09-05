@@ -87,7 +87,7 @@
 
 /* ---------------- Pitch：GM6020 外位置环 + 内速度环 ---------------- */
 #define PITCH_GM6020_CAN_ID                2U
-#define PITCH_GRAVITY_ONLY_ENABLE          1U
+#define PITCH_GRAVITY_ONLY_ENABLE          0U
 #define PITCH_ANGLE_KP_RPM_PER_RAD        75.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
 #define PITCH_ANGLE_KD_RPM_S_PER_RAD      1.0f
@@ -104,7 +104,7 @@
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
 /* Positive feedforward counteracts gravity in the measured installation.
  * If bench testing shows it increases the downward pull, flip only this sign. */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         5000.0f
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         7000.0f
 #define PITCH_GRAVITY_ZERO_RAD            0.0f
 #define PITCH_GRAVITY_ANGLE_MIN_DEG      (-24.34f)
 #define PITCH_GRAVITY_ANGLE_MAX_DEG       (49.58f)
@@ -167,15 +167,32 @@
 #define LAUNCH_M3508_ID3_SPEED_LPF_ALPHA  0.20f
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
-/* ---------------- 拨弹 M2006 ID5 速度环 PID ---------------- */
-#define LAUNCH_M2006_ID5_SPEED_KP         8.0f
-#define LAUNCH_M2006_ID5_SPEED_KI         1.0f
+/* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
+ * 电机轴转速环。KP=10 保守抑制极限环；KI=3 提供稳态电流把电机推到目标转速。
+ * 输出限幅 8A：P36 放大扭矩后足够推动弹丸，8A 也避开满 10A 撞饱和极限环。 */
+#define LAUNCH_M2006_ID5_SPEED_KP         10.0f
+#define LAUNCH_M2006_ID5_SPEED_KI         3.0f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   10000.0f
-#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     10000.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 30.0f
-#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.20f
+#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   4000.0f
+#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     8000.0f
+#define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 200.0f
+#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.40f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
+
+/* ---------------- 拨弹 M2006 ID5 角度-速度双环 ----------------
+ * 编码器在电机轴(8192 计数/圈)，拨盘在 P36 减速箱输出端(36:1)，
+ * 输出角 = 电机角/36。S1 语义：1=保持(角度环)  2=连发(纯速度环 20Hz)
+ * 3=单动(角度环)：每次从 1 拨到 3 触发一步 +40°输出(电机转 4 圈)。
+ * 36:1 使电机端反射惯量放大 36²，动态变慢，比直驱更易控稳。 */
+#define M2006_ENCODER_COUNTS_PER_REV      8192.0f
+#define M2006_OUTPUT_GEAR_RATIO           36.0f
+#define LAUNCH_M2006_ID5_STEP_DEG         40.0f  /* 每发 = 输出轴 40° = 电机 1440° */
+/* S1=2 连发 20Hz：输出 133.3rpm = 电机轴 133.3×36 = 4800rpm(电机空载约 5000)。 */
+#define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
+#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 40.0f  /* 输出°→电机rpm：10°误差→400rpm */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   400.0f /* 接近速度低些，减速更从容 */
+#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    4.0f  /* 到位死区：误差<4°断电靠摩擦停 */
+#define M2006_STOP_DEADBAND_RPM                5.0f  /* M2006 速度环断电阈值(rpm) */
 
 #define TASK_DEG_TO_RAD                   0.017453292519943295f
 

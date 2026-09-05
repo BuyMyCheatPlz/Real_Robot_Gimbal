@@ -70,6 +70,7 @@ typedef struct
 {
     float flywheel_speed_rpm;
     float feeder_speed_rpm;
+    uint16_t feeder_switch;   /* 原始 S1 开关值：1=保持 2=单步 3=连续 */
     uint32_t timestamp_ms;
     uint32_t flags;
 } LaunchParameterUpdate_t;
@@ -130,6 +131,8 @@ typedef struct
     uint8_t targets_initialized;
     uint8_t yaw_test_active;
     uint8_t yaw_hold_active;
+    float m2006_target_deg;
+    float m2006_actual_deg;
 } GimbalControlState_t;
 
 extern volatile GimbalControlState_t gimbal_control_state;

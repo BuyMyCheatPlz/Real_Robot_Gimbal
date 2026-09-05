@@ -38,4 +38,10 @@ real_robot_gimbal\vofa.o: ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_
 real_robot_gimbal\vofa.o: ../Core/Inc/usart.h
 real_robot_gimbal\vofa.o: ../Core/Inc/main.h
 real_robot_gimbal\vofa.o: ../Tasks/Inc/config.h
+real_robot_gimbal\vofa.o: ../Hardware_Drivers/Can/Inc/can_motor_bus.h
+real_robot_gimbal\vofa.o: ../Hardware_Drivers/m3508+c620/Inc/m3508.h
+real_robot_gimbal\vofa.o: ../Hardware_Drivers/Can/Inc/motor_common.h
+real_robot_gimbal\vofa.o: ../Hardware_Drivers/m2006+c610/Inc/m2006.h
+real_robot_gimbal\vofa.o: ../Hardware_Drivers/Gm6020/Inc/gm6020.h
+real_robot_gimbal\vofa.o: ../Hardware_Drivers/Dm4310/Inc/dm4310.h
 real_robot_gimbal\vofa.o: D:\Users\Enjory Wong\AppData\Local\Keil_v5\ARM\ARMCC\Bin\..\include\string.h

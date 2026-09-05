@@ -34,6 +34,15 @@ int16_t M2006_Update(M2006_t *motor, float dt_s)
     if ((motor == 0) || (motor->feedback.online == 0U)) return 0;
     motor->filtered_speed_rpm += motor->speed_filter_alpha *
         ((float)motor->feedback.speed_rpm - motor->filtered_speed_rpm);
+    /* 目标转速接近零(由角度环到位死区或保持指令触发)时直接断电，不再经过
+     * 速度环。否则重载 + 减速器背隙下 P 项对振荡的速度反馈持续输出大电流，
+     * 形成目标点附近的极限环(实测 ~5Hz ±4° 抖动)。断电后靠负载阻力自然停车。 */
+    if ((motor->target_speed_rpm < M2006_STOP_DEADBAND_RPM) &&
+        (motor->target_speed_rpm > -M2006_STOP_DEADBAND_RPM))
+    {
+        MotorSpeedPid_Reset(&motor->speed_pid);
+        return 0;
+    }
     return MotorSpeedPid_Calculate(&motor->speed_pid, motor->target_speed_rpm,
                                    motor->filtered_speed_rpm, dt_s);
 }

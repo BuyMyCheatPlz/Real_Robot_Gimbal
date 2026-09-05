@@ -126,6 +126,7 @@ static void publish_launch_parameters(const DBusData_t *remote,
             map_dbus_switch_speed(remote->channel[REMOTE_CH_S1_INDEX],
                                   LAUNCH_M2006_ID5_MAX_SPEED_RPM,
                                   50.0f);
+        update.feeder_switch = remote->channel[REMOTE_CH_S1_INDEX];
         if ((can1_m3508_id2.feedback.online != 0U) ||
             (can1_m3508_id3.feedback.online != 0U))
         {

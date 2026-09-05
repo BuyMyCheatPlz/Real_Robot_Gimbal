@@ -3,6 +3,7 @@
 #include "cmsis_os2.h"
 #include "usart.h"
 #include "config.h"
+#include "can_motor_bus.h"
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
@@ -153,25 +154,14 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        /* Pitch gravity-feedforward diagnostics. */
-        channels[0] = snapshot.imu_pitch_rad * 57.295779513082320876f;
-        channels[1] = snapshot.pitch_gravity_ff_setting;
-        channels[2] = snapshot.gravity_feedforward;
-        channels[3] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
-        channels[4] = snapshot.pitch_speed_rpm;
-        channels[5] = (float)snapshot.can1_gm6020_id2_online;
-        channels[6] = (float)snapshot.control_inhibit_flags;
-        channels[7] = (float)snapshot.can1_tx_free_level;
-        channels[8] = (float)snapshot.can2_dm4310_id1_online;
-        channels[9] = (float)snapshot.dm4310_feedback_count;
-        channels[10] = (float)snapshot.can2_tx_free_level;
-        channels[11] = (float)snapshot.can2_last_rx_std_id;
-        channels[12] = (float)snapshot.can_bus_error_count;
-        channels[13] = (float)snapshot.can1_busoff_count;
-        channels[14] = (float)snapshot.can1_recovery_count;
-        channels[15] = (float)snapshot.can2_busoff_count;
-        channels[16] = (float)snapshot.can2_recovery_count;
-        channels[17] = (float)snapshot.can2_last_error;
+        /* 目标角 / 实际角（rad→°），供闭环跟踪整定观察。 */
+        channels[0] = snapshot.pitch_target_rad * 57.295779513082320876f;
+        channels[1] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
+        channels[2] = snapshot.yaw_target_rad * 57.295779513082320876f;
+        channels[3] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
+        /* M2006 角度环：目标角 / 实际角(输出轴，°)。 */
+        channels[4] = snapshot.m2006_target_deg;
+        channels[5] = snapshot.m2006_actual_deg;
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;
         wake_tick += VOFA_PERIOD_MS;
