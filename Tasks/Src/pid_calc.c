@@ -63,6 +63,73 @@ static int16_t yaw_test_current_get(uint32_t now_ms, uint8_t *active)
     return (*active != 0U) ? current : 0;
 }
 
+#if (YAW_SYSID_MODE != 0U)
+/* ---------------- Yaw 系统辨识：线性扫频正弦激励 ----------------
+ * identify_on 触发；f(t)=FREQ_START+(FREQ_END-FREQ_START)*t/时长。
+ * 运行中 DM4310 直通该电流(旁路速度 PID)，打印 I6=指令 I7=原始速度。 */
+static volatile uint8_t yaw_sysid_running;
+static volatile uint32_t yaw_sysid_start_ms;
+static float yaw_sysid_phase;
+
+void Gimbal_YawSysid_Start(void)
+{
+    yaw_sysid_start_ms = HAL_GetTick();
+    yaw_sysid_phase = 0.0f;
+    yaw_sysid_running = 1U;
+}
+
+void Gimbal_YawSysid_Abort(void)
+{
+    yaw_sysid_running = 0U;
+    yaw_sysid_phase = 0.0f;
+}
+
+uint8_t Gimbal_YawSysid_IsRunning(void)
+{
+    return yaw_sysid_running;
+}
+
+float Gimbal_YawSysid_ElapsedSeconds(void)
+{
+    if (yaw_sysid_running == 0U) return 0.0f;
+    return (float)(HAL_GetTick() - yaw_sysid_start_ms) * 0.001f;
+}
+
+float Gimbal_YawSysid_Update(uint32_t now_ms, float dt_s)
+{
+    float elapsed_s;
+    float duration_s;
+    float fraction;
+    float frequency_hz;
+    float amplitude;
+    float command;
+    if (yaw_sysid_running == 0U) return 0.0f;
+    elapsed_s = (float)(now_ms - yaw_sysid_start_ms) * 0.001f;
+    duration_s = (float)YAW_SYSID_DURATION_MS * 0.001f;
+    if (elapsed_s >= duration_s)
+    {
+        /* 时长到，自动停止，等待下一次 identify_on */
+        yaw_sysid_running = 0U;
+        yaw_sysid_phase = 0.0f;
+        return 0.0f;
+    }
+    if (dt_s <= 0.0f) return 0.0f;
+    fraction = elapsed_s / duration_s;
+    if (fraction < 0.0f) fraction = 0.0f;
+    if (fraction > 1.0f) fraction = 1.0f;
+    frequency_hz = YAW_SYSID_FREQ_START_HZ +
+        (YAW_SYSID_FREQ_END_HZ - YAW_SYSID_FREQ_START_HZ) * fraction;
+    yaw_sysid_phase += TWO_PI_F * frequency_hz * dt_s;
+    while (yaw_sysid_phase > TWO_PI_F)
+        yaw_sysid_phase -= TWO_PI_F;
+    amplitude = YAW_SYSID_AMPLITUDE_CURRENT;
+    if (amplitude > DM4310_CURRENT_COMMAND_LIMIT)
+        amplitude = DM4310_CURRENT_COMMAND_LIMIT;
+    command = amplitude * sinf(yaw_sysid_phase) * YAW_MOTOR_COMMAND_SIGN;
+    return command;
+}
+#endif /* YAW_SYSID_MODE */
+
 static float clampf(float value, float limit)
 {
     if (value > limit) return limit;
@@ -587,6 +654,66 @@ void PID_calc(void *argument)
                     yaw_target = yaw_home - YAW_SOFT_LIMIT_RAD;
             }
 
+#if (YAW_SYSID_MODE != 0U)
+            if (can2_dm4310_id1.online != 0U)
+            {
+                /* ===== 辨识固件(YAW_SYSID_MODE=1)：pitch 无输出、yaw 不使用 PID =====
+                 * 空闲时 DM4310 直通 0 电流(自由)；identify_on 后直通正弦扫频并打印。
+                 * 宏=0 时本分支不编译，走下面的常规控制。 */
+                float sysid_command;
+                sysid_command = Gimbal_YawSysid_Update(now_ms, control_dt_s);
+                /* Pitch：前馈 0、速度 0，位置/速度 PID 每周期复位，无输出 */
+                reset_position_pid(&pitch_angle_pid);
+                MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+                GM6020_SetVoltageFeedforward(&can1_gm6020_id2, 0.0f);
+                GM6020_SetSpeed(&can1_gm6020_id2, 0.0f);
+                /* Yaw：不使用速度 PID；DM4310 驱动层直通指令电流 */
+                reset_position_pid(&yaw_angle_pid);
+                MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
+                can2_dm4310_id1.current_quantization_error = 0.0f;
+                can2_dm4310_id1.direct_current_en = 1U;
+                can2_dm4310_id1.direct_current = sysid_command;
+                YawHold_Reset(&yaw_hold_state);
+                yaw_profile_speed = 0.0f;
+                yaw_profile_acceleration = 0.0f;
+                motor_status = CanMotorBus_UpdateSelected(control_dt_s, 0U, 1U);
+                if (motor_status != HAL_OK)
+                    Gimbal_YawSysid_Abort();
+                gimbal_control_state.sysid_running =
+                    (uint8_t)(Gimbal_YawSysid_IsRunning() != 0U);
+                gimbal_control_state.sysid_time_s =
+                    Gimbal_YawSysid_ElapsedSeconds();
+                gimbal_control_state.sysid_command = sysid_command;
+                gimbal_control_state.sysid_speed_rpm =
+                    can2_dm4310_id1.speed_rpm;   /* 原始反馈速度，不滤波 */
+                gimbal_control_state.active =
+                    gimbal_control_state.sysid_running;
+                gimbal_control_state.gravity_feedforward = 0.0f;
+            }
+            else
+            {
+                /* DM4310 离线：中止辨识；pitch/yaw 断电，其余电机按常规停机 */
+                Gimbal_YawSysid_Abort();
+                reset_position_pid(&pitch_angle_pid);
+                MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+                reset_position_pid(&yaw_angle_pid);
+                MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
+                can2_dm4310_id1.direct_current_en = 0U;
+                can2_dm4310_id1.direct_current = 0.0f;
+                GM6020_SetVoltageFeedforward(&can1_gm6020_id2, 0.0f);
+                GM6020_SetSpeed(&can1_gm6020_id2, 0.0f);
+                DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
+                DM4310_SetCurrentFeedforward(&can2_dm4310_id1, 0);
+                motor_status = CanMotorBus_StopGimbal(control_dt_s);
+                gimbal_control_state.active = 0U;
+                gimbal_control_state.gravity_feedforward = 0.0f;
+                gimbal_control_state.sysid_running = 0U;
+                gimbal_control_state.sysid_time_s = 0.0f;
+                gimbal_control_state.sysid_command = 0.0f;
+                gimbal_control_state.sysid_speed_rpm = 0.0f;
+            }
+#else
+            /* ===== 常规电机输出选择：yaw 测试 / 闭环控制 / 停机 ===== */
             if ((yaw_test_active != 0U) &&
                 (can2_dm4310_id1.online != 0U) && (can_healthy != 0U) &&
                 (YAW_CLOSED_LOOP_ENABLE == 0U))
@@ -715,6 +842,7 @@ void PID_calc(void *argument)
                 gimbal_control_state.active = 0U;
                 gimbal_control_state.gravity_feedforward = 0.0f;
             }
+#endif /* YAW_SYSID_MODE */
 
             CanMotorBus_GetStatus(&bus_status);
             if (((pitch_control_permitted != 0U) &&

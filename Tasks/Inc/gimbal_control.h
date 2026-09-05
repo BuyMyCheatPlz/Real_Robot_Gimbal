@@ -135,6 +135,10 @@ typedef struct
     float m2006_actual_deg;
     float m2006_target_rounds;   /* 累计指令发弹数 */
     float m2006_actual_rounds;   /* 累计实际发弹数(输出旋转/40°) */
+    float sysid_time_s;          /* yaw 辨识运行时间(s) */
+    float sysid_command;         /* 给 DM4310 的直通电流指令 */
+    float sysid_speed_rpm;       /* DM4310 原始速度反馈 rpm(不滤波) */
+    uint8_t sysid_running;       /* yaw 辨识进行中 */
 } GimbalControlState_t;
 
 extern volatile GimbalControlState_t gimbal_control_state;
@@ -142,6 +146,12 @@ extern volatile GimbalControlState_t gimbal_control_state;
 void Data_Process(void *argument);
 void PID_calc(void *argument);
 void Gimbal_YawTest_Request(int16_t current);
+/* Yaw 系统辨识接口：仅在 YAW_SYSID_MODE!=0 的构建中有定义并被调用。 */
+void Gimbal_YawSysid_Start(void);     /* identify_on：开始一次辨识 */
+void Gimbal_YawSysid_Abort(void);     /* 强制停止(离线/发送失败等) */
+uint8_t Gimbal_YawSysid_IsRunning(void);
+float Gimbal_YawSysid_ElapsedSeconds(void);
+float Gimbal_YawSysid_Update(uint32_t now_ms, float dt_s); /* 返回正弦电流指令 */
 void VOFA_print(void *argument);
 void Launch_Task(void *argument);
 

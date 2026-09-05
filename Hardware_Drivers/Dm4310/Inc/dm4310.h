@@ -25,6 +25,8 @@ typedef struct
     float filtered_speed_rpm;
     float speed_filter_alpha;
     int16_t torque_current_ma;
+    float direct_current;      /* 开环直通电流命令(系统辨识用，旁路速度 PID) */
+    uint8_t direct_current_en; /* 1=DM4310_Update 直接输出 direct_current */
     uint8_t winding_temperature;
     uint8_t pcb_temperature;
     uint8_t speed_filter_initialized;

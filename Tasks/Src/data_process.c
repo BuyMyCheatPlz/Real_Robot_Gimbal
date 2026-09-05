@@ -95,6 +95,14 @@ static void process_vofa_commands(void)
     int16_t yaw_test_current;
     while (VOFA_GetCommand(command) != 0U)
     {
+#if (YAW_SYSID_MODE != 0U)
+        if (strcmp(command, "identify_on") == 0)
+        {
+            /* 开始一次 yaw 系统辨识(正弦扫频直通电流)，可重复触发 */
+            Gimbal_YawSysid_Start();
+            continue;
+        }
+#endif
         if (parse_yaw_test_command(command, &yaw_test_current) != 0U)
         {
             Gimbal_YawTest_Request(yaw_test_current);

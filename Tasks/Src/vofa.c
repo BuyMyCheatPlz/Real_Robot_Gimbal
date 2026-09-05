@@ -7,7 +7,13 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-#define VOFA_CHANNEL_COUNT VOFA_CONTROL_CHANNEL_COUNT
+/* 每帧 float 数按构建模式区分：正常模式(YAW_SYSID_MODE=0)=6，与原固件帧格式
+ * 逐字节一致；辨识模式=8(追加 I6=电流指令、I7=yaw 原始速度)。 */
+#if (YAW_SYSID_MODE != 0U)
+#define VOFA_CHANNEL_COUNT 8U
+#else
+#define VOFA_CHANNEL_COUNT 6U
+#endif
 #define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
 #define VOFA_TX_LENGTH      (VOFA_PAYLOAD_LENGTH + 4U)
 #define VOFA_COMMAND_QUEUE_DEPTH 4U
@@ -178,6 +184,20 @@ void VOFA_print(void *argument)
         /* M2006 发弹数：目标/实际，取整(发弹量是整数)。 */
         channels[4] = (float)(int32_t)snapshot.m2006_target_rounds;
         channels[5] = (float)(int32_t)snapshot.m2006_actual_rounds;
+#if (YAW_SYSID_MODE != 0U)
+        /* yaw 辨识新增：I6=给 DM4310 的电流指令，I7=yaw 原始速度 rpm(不滤波)。
+         * 辨识模式：仅运行期间打印；运行结束/未触发时静默，记录自动停止 */
+        channels[6] = snapshot.sysid_command;
+        channels[7] = snapshot.sysid_speed_rpm;
+        if (snapshot.sysid_running == 0U)
+        {
+            ++vofa_heartbeat;
+            wake_tick += VOFA_PERIOD_MS;
+            if (osDelayUntil(wake_tick) != osOK)
+                wake_tick = osKernelGetTickCount();
+            continue;
+        }
+#endif
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;
         wake_tick += VOFA_PERIOD_MS;

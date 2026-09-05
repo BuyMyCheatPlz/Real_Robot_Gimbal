@@ -246,6 +246,8 @@ static void reset_yaw_control(void)
 {
     DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);
     DM4310_SetCurrentFeedforward(&can2_dm4310_id1, 0);
+    can2_dm4310_id1.direct_current_en = 0U;   /* 退出直通(辨识)模式 */
+    can2_dm4310_id1.direct_current = 0.0f;
     MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
     can2_dm4310_id1.current_quantization_error = 0.0f;
     can2_dm4310_id1.filtered_speed_rpm = 0.0f;

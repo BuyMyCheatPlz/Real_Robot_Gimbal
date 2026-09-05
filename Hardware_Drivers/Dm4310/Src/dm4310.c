@@ -85,6 +85,17 @@ int16_t DM4310_Update(DM4310_t *motor, float dt_s)
         motor->current_quantization_error = 0.0f;
         return 0;
     }
+    /* 系统辨识开环直通：旁路速度 PID，直接输出指令电流。 */
+    if (motor->direct_current_en != 0U)
+    {
+        float dc = motor->direct_current;
+        if (dc > DM4310_CURRENT_COMMAND_LIMIT)
+            dc = DM4310_CURRENT_COMMAND_LIMIT;
+        if (dc < -DM4310_CURRENT_COMMAND_LIMIT)
+            dc = -DM4310_CURRENT_COMMAND_LIMIT;
+        return (dc >= 0.0f) ? (int16_t)(dc + 0.5f) :
+                              (int16_t)(dc - 0.5f);
+    }
     if (motor->speed_filter_initialized == 0U)
     {
         motor->filtered_speed_rpm = motor->speed_rpm;

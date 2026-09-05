@@ -203,4 +203,19 @@
 
 #define TASK_DEG_TO_RAD                   0.017453292519943295f
 
+/* ---------------- Yaw 系统辨识模式 ----------------
+ * YAW_SYSID_MODE=0：完全的原程序——pitch/yaw 正常 PID，VOFA 按原 6 通道帧
+ * 连续打印，行为与原固件一致。
+ * YAW_SYSID_MODE=1：辨识固件——pitch 电机不输出，yaw 不使用 PID(空闲 0 电流
+ * 自由)；串口静默，收到 identify_on 后 DM4310 直通正弦线性扫频并开始打印
+ * (I6=给 DM4310 的电流指令，I7=yaw 原始速度 rpm 不滤波)，运行
+ * YAW_SYSID_DURATION_MS 后自动停止打印与激励，可重复触发。
+ * 扫频频率随时间线性：f(t)=FREQ_START+(FREQ_END-FREQ_START)*t/时长。
+ * 幅值上限 = YAW_CURRENT_OUTPUT_LIMIT(16384, DM4310 协议上限)。 */
+#define YAW_SYSID_MODE                    1U
+#define YAW_SYSID_AMPLITUDE_CURRENT       8000.0f   /* 扫频幅值(≤16384) */
+#define YAW_SYSID_FREQ_START_HZ           1.0f      /* 起始频率 */
+#define YAW_SYSID_FREQ_END_HZ             20.0f     /* 结束频率(线性扫频) */
+#define YAW_SYSID_DURATION_MS             20000U    /* 单次辨识时长 */
+
 #endif
