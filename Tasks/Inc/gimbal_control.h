@@ -133,6 +133,8 @@ typedef struct
     uint8_t yaw_hold_active;
     float m2006_target_deg;
     float m2006_actual_deg;
+    float m2006_target_rounds;   /* 累计指令发弹数 */
+    float m2006_actual_rounds;   /* 累计实际发弹数(输出旋转/40°) */
 } GimbalControlState_t;
 
 extern volatile GimbalControlState_t gimbal_control_state;

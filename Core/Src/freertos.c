@@ -79,7 +79,7 @@ const osThreadAttr_t vofa_attributes = {
 osThreadId_t launchHandle;
 const osThreadAttr_t launch_attributes = {
   .name = "launch",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,   /* 512B 偏小易溢出导致 launch 卡死(表现为 M2006 不更新+电机疯转) */
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Target_Angle */

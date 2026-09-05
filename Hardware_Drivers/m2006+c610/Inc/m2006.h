@@ -12,6 +12,7 @@ typedef struct
     float speed_filter_alpha;
     DjiMotorFeedback_t feedback;
     MotorSpeedPid_t speed_pid;
+    uint32_t last_cmd_ms;   /* 最近一次 SetSpeed 时间；用于命令保活安全 */
 } M2006_t;
 
 void M2006_Init(M2006_t *motor, uint8_t id, float kp, float ki);

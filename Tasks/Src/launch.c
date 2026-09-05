@@ -15,6 +15,9 @@ static int32_t m2006_accum_encoder = 0;
 static int32_t m2006_last_encoder = 0;
 static float m2006_target_output_deg = 0.0f;
 static uint16_t m2006_prev_switch = 0U;
+static uint32_t m2006_last_step_ms = 0U;   /* 连发档步进计时 */
+static float m2006_target_rounds = 0.0f;   /* 累计指令发弹数 */
+static float m2006_actual_rounds = 0.0f;   /* 累计实际发弹数(输出旋转/40°) */
 static uint8_t m2006_angle_initialized = 0U;
 
 /* 积分编码器差分(处理 8192 回绕)，返回输出轴(拨盘)角度(°)。 */
@@ -138,31 +141,52 @@ void Launch_Task(void *argument)
                 m2006_accum_encoder = 0;
                 m2006_target_output_deg = 0.0f;
                 m2006_prev_switch = sw;
+                m2006_last_step_ms = HAL_GetTick();
                 m2006_angle_initialized = 1U;
             }
 
             output_deg = m2006_read_output_deg();
+            /* 实际发弹数 = 已完整推进的 40° 数(取整、单调不扣)。 */
+            {
+                float rounds_now = output_deg / LAUNCH_M2006_ID5_STEP_DEG;
+                int32_t completed = (int32_t)rounds_now;
+                if ((float)completed > m2006_actual_rounds)
+                    m2006_actual_rounds = (float)completed;
+            }
 
             /* 模式切换：目标同步到当前位置。S1 语义：
-             * 1=保持(角度环)  2=连发(纯速度环 4800rpm=20Hz)
+             * 1=保持(角度环)  2=连发(纯速度环 4800rpm=20Hz，实测稳定)
              * 3=单动(角度环)：每次从 1 拨到 3 触发一步 +40°(输出)。 */
             if (sw != m2006_prev_switch)
             {
                 uint16_t old_sw = m2006_prev_switch;
                 m2006_target_output_deg = output_deg;
                 m2006_prev_switch = sw;
+                m2006_last_step_ms = HAL_GetTick();
                 MotorSpeedPid_Reset(&can2_m2006_id5.speed_pid);
                 if ((sw == 3U) && (old_sw == 1U))
+                {
                     m2006_target_output_deg += LAUNCH_M2006_ID5_STEP_DEG;
+                    m2006_target_rounds += 1.0f;   /* 单动：记 1 发 */
+                }
             }
 
             if (sw == 2U)
             {
-                /* S1=2 连发：纯速度环。内环积分用于扛住 4800rpm 的持续负载。 */
+                /* S1=2 连发：纯速度环 4800rpm(20Hz)，实测稳定。
+                 * 目标发弹数按名义射速累加(20发/s)，与实际发弹数对比可看是否跟上。 */
+                uint32_t now;
+                float dt_s;
                 MotorSpeedPid_SetGains(&can2_m2006_id5.speed_pid,
                                        LAUNCH_M2006_ID5_SPEED_KP,
                                        LAUNCH_M2006_ID5_SPEED_KI, 0.0f);
-                m2006_target_output_deg = output_deg;
+                now = HAL_GetTick();
+                dt_s = (float)(now - m2006_last_step_ms) * 0.001f;
+                m2006_last_step_ms = now;
+                if ((dt_s >= 0.0f) && (dt_s < 0.5f))
+                    m2006_target_rounds +=
+                        (LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM / 240.0f) * dt_s;
+                m2006_target_output_deg = output_deg;  /* 目标跟随实际(仅显示) */
                 M2006_SetSpeed(&can2_m2006_id5,
                     LAUNCH_M2006_ID5_DIRECTION *
                     LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM);
@@ -196,14 +220,20 @@ void Launch_Task(void *argument)
 
             gimbal_control_state.m2006_target_deg = m2006_target_output_deg;
             gimbal_control_state.m2006_actual_deg = output_deg;
+            gimbal_control_state.m2006_target_rounds = m2006_target_rounds;
+            gimbal_control_state.m2006_actual_rounds = m2006_actual_rounds;
         }
         else
         {
             M2006_SetSpeed(&can2_m2006_id5, 0.0f);
             MotorSpeedPid_Reset(&can2_m2006_id5.speed_pid);
             m2006_angle_initialized = 0U;
+            m2006_target_rounds = 0.0f;
+            m2006_actual_rounds = 0.0f;
             gimbal_control_state.m2006_target_deg = 0.0f;
             gimbal_control_state.m2006_actual_deg = 0.0f;
+            gimbal_control_state.m2006_target_rounds = 0.0f;
+            gimbal_control_state.m2006_actual_rounds = 0.0f;
         }
     }
 }

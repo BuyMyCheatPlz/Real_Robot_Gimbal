@@ -168,31 +168,38 @@
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
- * 电机轴转速环。KP=10 保守抑制极限环；KI=3 提供稳态电流把电机推到目标转速。
- * 输出限幅 8A：P36 放大扭矩后足够推动弹丸，8A 也避开满 10A 撞饱和极限环。 */
+ * 电机轴转速环。KP=10 保守抑制极限环。输出限幅放满 10A：推弹瞬间负载大，
+ * 8A 不够顶会掉速、弹丸顶开后积分+饱和 P 又把电机猛冲到 5570rpm(超指令)，
+ * 猛撞下一颗弹导致卡死(I5 冻结)。满电流让推弹更稳、掉速更小。
+ * 积分 KI=2、限幅 2000 防 windup 超速；分离=0 始终积分扛负载。 */
 #define LAUNCH_M2006_ID5_SPEED_KP         10.0f
-#define LAUNCH_M2006_ID5_SPEED_KI         3.0f
+#define LAUNCH_M2006_ID5_SPEED_KI         2.0f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   4000.0f
-#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     8000.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 200.0f
-#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.40f
+#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   2000.0f
+#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     10000.0f
+#define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 0.0f
+/* 速度滤波 alpha：0.8 滞后小(~2.5ms)，避免快电机刹车前冲过指令速度。 */
+#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.80f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
 
 /* ---------------- 拨弹 M2006 ID5 角度-速度双环 ----------------
  * 编码器在电机轴(8192 计数/圈)，拨盘在 P36 减速箱输出端(36:1)，
- * 输出角 = 电机角/36。S1 语义：1=保持(角度环)  2=连发(纯速度环 20Hz)
- * 3=单动(角度环)：每次从 1 拨到 3 触发一步 +40°输出(电机转 4 圈)。
+ * 输出角 = 电机角/36。S1 语义：1=保持(角度环)  2=连发(纯速度环 4800rpm=20Hz)
+ * 3=单动(角度环)：每次从 1 拨到 3 触发一步 +40°输出。
  * 36:1 使电机端反射惯量放大 36²，动态变慢，比直驱更易控稳。 */
 #define M2006_ENCODER_COUNTS_PER_REV      8192.0f
 #define M2006_OUTPUT_GEAR_RATIO           36.0f
 #define LAUNCH_M2006_ID5_STEP_DEG         40.0f  /* 每发 = 输出轴 40° = 电机 1440° */
-/* S1=2 连发 20Hz：输出 133.3rpm = 电机轴 133.3×36 = 4800rpm(电机空载约 5000)。 */
+/* 连发档名义转速 4800rpm(20Hz 步进)；实际由角度环追目标决定，上限
+ * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
 #define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 40.0f  /* 输出°→电机rpm：10°误差→400rpm */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   400.0f /* 接近速度低些，减速更从容 */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   250.0f /* 单动接近速度降到 250，减速更从容 */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5000.0f /* 连发档限速：需追 4800rpm 目标 */
+#define LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS   50U        /* 连发档步进周期 = 20Hz */
 #define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    4.0f  /* 到位死区：误差<4°断电靠摩擦停 */
 #define M2006_STOP_DEADBAND_RPM                5.0f  /* M2006 速度环断电阈值(rpm) */
+#define M2006_CMD_STALE_TIMEOUT_MS             100U  /* 命令保活：launch 卡死则断电 */
 
 #define TASK_DEG_TO_RAD                   0.017453292519943295f
 
