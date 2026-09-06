@@ -198,24 +198,9 @@ static float signf(float value)
 
 static float pitch_gravity_feedforward_scale(float pitch_rad)
 {
-    const float min_rad = PITCH_GRAVITY_ANGLE_MIN_DEG * TASK_DEG_TO_RAD;
-    const float max_rad = PITCH_GRAVITY_ANGLE_MAX_DEG * TASK_DEG_TO_RAD;
-    float limited_pitch = pitch_rad;
-    float min_torque;
-    float max_torque;
-    float normalization_torque;
-    float scale;
-
-    if (limited_pitch < min_rad) limited_pitch = min_rad;
-    if (limited_pitch > max_rad) limited_pitch = max_rad;
-    min_torque = sinf(min_rad);
-    max_torque = sinf(max_rad);
-    normalization_torque = (limited_pitch < 0.0f) ?
-        fabsf(min_torque) : fabsf(max_torque);
-    if (normalization_torque < 0.001f) return 0.0f;
-    scale = PITCH_GRAVITY_SIGN * sinf(limited_pitch) /
-            normalization_torque;
-    return scale;
+    /* 去掉了角度限幅与 ±1 归一化：重力前馈直接按 sin(角度) 比例，
+     * 实际电压幅值由调用处的 pitch_gravity_ff_voltage(宏 PITCH_GRAVITY_FF_MAX_VOLTAGE)决定。 */
+    return PITCH_GRAVITY_SIGN * sinf(pitch_rad);
 }
 
 /* 有限加速度轨迹同时提供速度和加速度参考，避免对不连续的位置阶跃求导。 */
@@ -867,6 +852,8 @@ void PID_calc(void *argument)
                 bus_status.can1_recovery_count;
             gimbal_control_state.can2_recovery_count =
                 bus_status.can2_recovery_count;
+            gimbal_control_state.can1_last_error =
+                bus_status.can1_last_error;
             gimbal_control_state.can2_last_error =
                 bus_status.can2_last_error;
             gimbal_control_state.dm4310_feedback_count =
@@ -875,6 +862,10 @@ void PID_calc(void *argument)
                 bus_status.can2_tx_complete_count;
             gimbal_control_state.can2_tx_busy_count =
                 bus_status.can2_tx_busy_count;
+            gimbal_control_state.can1_rx_count =
+                bus_status.can1_rx_count;
+            gimbal_control_state.can2_rx_count =
+                bus_status.can2_rx_count;
             gimbal_control_state.can2_last_rx_std_id =
                 bus_status.last_can2_rx_std_id;
             gimbal_control_state.can_last_send_failure_mask =

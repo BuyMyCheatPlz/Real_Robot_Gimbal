@@ -7,7 +7,10 @@
 #include "gm6020.h"
 #include "dm4310.h"
 
-#define CAN_MOTOR_OFFLINE_TIMEOUT_MS 100U
+/* 反馈离线超时：DJI 电机反馈约 1kHz(1ms/帧)。收紧到 10ms，让单个电机反馈一断
+ * 就自己判离线→速度环复位断输出，不再拿着旧转速疯转，也不拖累其它电机。
+ * (每个电机独立判定，DM4310 有优先发送/独立反馈所以最稳。) */
+#define CAN_MOTOR_OFFLINE_TIMEOUT_MS 10U
 #define CAN_MOTOR_TX_FAILURE_LATCH_COUNT 3U
 #define CAN_MOTOR_TX_RECOVERY_FRAME_COUNT 10U
 

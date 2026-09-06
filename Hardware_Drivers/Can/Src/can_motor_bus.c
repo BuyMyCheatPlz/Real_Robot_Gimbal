@@ -196,31 +196,7 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
         }
     }
 
-    if ((YAW_COMMISSIONING_MODE == 0U) &&
-        (tx_capacity_available(bus_can1, 2U) == 0U))
-    {
-        busy_mask |= 0x03U;
-    }
-
-    {
-        /* DM4310（Yaw 云台）必须持续收到 0x3FE 才能维持反馈，因此优先保证它的
-         * 发送；M2006 拨盘只有在邮箱还能多放一帧时才发送，避免被卡住的 M2006
-         * 帧把 DM4310 的控制帧也一起饿死。 */
-        if (tx_capacity_available(bus_can2, 1U) == 0U)
-        {
-            busy_mask |= 0x08U;
-        }
-        else if ((YAW_COMMISSIONING_MODE == 0U) &&
-                 (can2_m2006_id5.feedback.online != 0U) &&
-                 (tx_capacity_available(bus_can2, 2U) == 0U))
-        {
-            busy_mask |= 0x04U;
-        }
-    }
-    /* Continue sending the DM4310 control ID while feedback is offline.  Some
-     * current-control firmware only resumes periodic feedback after receiving
-     * valid control traffic; silencing 0x3FE here would make an offline state
-     * self-perpetuating.  The offline frame is always exact zero current. */
+    /* 先打包 DM4310(离线也发 0 电流，保持 0x3FE 反馈不中断) */
     if (DM4310_PackCurrentCommand(&can2_dm4310_id1,
                                   (can2_dm4310_id1.online != 0U) ?
                                   dm4310_id1 : 0,
@@ -229,37 +205,49 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
         record_gimbal_commands(gm6020_id2, 0);
         return HAL_ERROR;
     }
-
     record_gimbal_commands((YAW_COMMISSIONING_MODE != 0U) ? 0 : gm6020_id2,
                            (can2_dm4310_id1.online != 0U) ? dm4310_id1 : 0);
 
+    /* ===== 逐帧独立发送：每帧只需 1 个空邮箱。任一帧被卡/未 ACK 都只影响它自己，
+     * 不会因为"需要 2 个空邮箱"的聚合判断把整条总线饿死。 ===== */
     if (YAW_COMMISSIONING_MODE == 0U)
     {
-        if ((busy_mask & 0x03U) == 0U)
+        if (tx_capacity_available(bus_can1, 1U) != 0U)
         {
             result = send_std(bus_can1, 0x200U, can1_c620);
-            accumulate_send_result(result, 1U, &failure_mask, &busy_mask,
-                                   &status);
-            result = send_std(bus_can1, gm_control_id, can1_gm);
-            accumulate_send_result(result, 2U, &failure_mask, &busy_mask,
-                                   &status);
+            accumulate_send_result(result, 1U, &failure_mask, &busy_mask, &status);
         }
-    }
-    if (YAW_COMMISSIONING_MODE == 0U)
-    {
-        if ((busy_mask & 0x0CU) == 0U)
+        else
+            busy_mask |= 0x01U;
+        if (tx_capacity_available(bus_can1, 1U) != 0U)
         {
-            result = send_std(bus_can2, 0x1FFU, can2_c610);
-            accumulate_send_result(result, 4U, &failure_mask, &busy_mask,
-                                   &status);
+            result = send_std(bus_can1, gm_control_id, can1_gm);
+            accumulate_send_result(result, 2U, &failure_mask, &busy_mask, &status);
         }
+        else
+            busy_mask |= 0x02U;
     }
-    if ((busy_mask & 0x08U) == 0U)
+
+    /* CAN2：DM4310 优先发；M2006 在 DM 之后还有空位再发(离线也发 0 电流唤醒) */
+    if (tx_capacity_available(bus_can2, 1U) != 0U)
     {
         result = send_std(bus_can2, dm_control_id, can2_dm);
         accumulate_send_result(result, 8U, &failure_mask, &busy_mask, &status);
     }
-    /* 卡死邮箱自动释放：连续被 busy 跳过则中止该总线邮箱，防止整条总线永久失联 */
+    else
+        busy_mask |= 0x08U;
+    if (YAW_COMMISSIONING_MODE == 0U)
+    {
+        if (tx_capacity_available(bus_can2, 1U) != 0U)
+        {
+            result = send_std(bus_can2, 0x1FFU, can2_c610);
+            accumulate_send_result(result, 4U, &failure_mask, &busy_mask, &status);
+        }
+        else
+            busy_mask |= 0x04U;
+    }
+
+    /* 卡死邮箱自动释放：连续被 busy 跳过则中止该总线邮箱，防止永久失联 */
     recover_stuck_tx_mailboxes(bus_can1, &can1_busy_since_ms,
                                (uint8_t)((busy_mask & 0x03U) != 0U));
     recover_stuck_tx_mailboxes(bus_can2, &can2_busy_since_ms,
@@ -402,14 +390,16 @@ static void recover_can_if_needed(CAN_HandleTypeDef *hcan,
                                   volatile uint8_t *pending,
                                   volatile uint32_t *recovery_count)
 {
-    (void)hcan;
-    (void)recovery_count;
-    /* ABOM（AutoBusOff）会由硬件自动恢复总线。这里不再做软件 Stop→Start：
-     * ABOM 在 ~1.4ms 内已恢复并重新开始重发，而本函数在任务上下文延迟执行，
-     * 此时 Stop 会打断正在重发的半截帧、进出 init mode，把残缺帧留在总线上，
-     * 诱发其它节点的错误帧并再次推高 TEC，形成 1k+ Hz 的 bus-off 死循环。
-     * 因此只清 pending，恢复完全交给 ABOM。 */
+    if (*pending == 0U) return;
     *pending = 0U;
+    /* ABOM 已由硬件自动恢复总线：bus-off 后经过 128×11 个隐性位，硬件自动把
+     * TEC/REC 清零并回到 error-active，无需软件干预。这里的 GetError/ResetError
+     * 只清 HAL 软件层的 ErrorCode 标志（HAL_CAN_ResetError 不触碰硬件 TEC/REC、
+     * 不进初始化模式、也不会截断在发的帧），避免旧错误标志残留影响后续判断。 */
+    (void)HAL_CAN_GetError(hcan);
+    (void)HAL_CAN_ResetError(hcan);
+    if (recovery_count != 0U)
+        ++(*recovery_count);
 }
 
 static void process_rx_fifo(CAN_HandleTypeDef *hcan, uint32_t now_ms)
@@ -520,18 +510,18 @@ void CanMotorBus_CheckOffline(uint32_t now_ms)
     can_service_busy = 1U;
     if (primask == 0U) __enable_irq();
 
-    /* RX FIFO 由 RX0 中断直接消费；任务上下文只做离线检查和总线恢复。 */
+    /* RX FIFO 只能由 RX0 中断消费。任务上下文绝不能再调 process_rx_fifo：
+     * 否则 ISR 与任务并发读同一个硬件 FIFO，RFOM 二次释放会把整帧弹掉没人解码，
+     * 表现为"总线反馈稳定却偶发判离线"。任务上下文只做离线检查与总线恢复。 */
     if (bus_can1 != 0)
     {
         recover_can_if_needed(bus_can1, &can1_recovery_pending,
                               &tx_status.can1_recovery_count);
-        process_rx_fifo(bus_can1, now_ms);
     }
     if (bus_can2 != 0)
     {
         recover_can_if_needed(bus_can2, &can2_recovery_pending,
                               &tx_status.can2_recovery_count);
-        process_rx_fifo(bus_can2, now_ms);
     }
     update_online(&can1_m3508_id2.feedback, now_ms);
     update_online(&can1_m3508_id3.feedback, now_ms);

@@ -91,21 +91,21 @@
 #define PITCH_GRAVITY_ONLY_ENABLE          0U
 #define PITCH_ANGLE_KP_RPM_PER_RAD        75.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
-#define PITCH_ANGLE_KD_RPM_S_PER_RAD      1.0f
+#define PITCH_ANGLE_KD_RPM_S_PER_RAD      2.5f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
 #define PITCH_MAX_SPEED_RPM                90.0f
 #define PITCH_SPEED_KP                    70.0f
 #define PITCH_SPEED_KI                     4.0f
 #define PITCH_SPEED_KD                    0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT         12000.0f
-#define PITCH_SPEED_OUTPUT_LIMIT           10000.0f
+#define PITCH_SPEED_OUTPUT_LIMIT           25000.0f
 #define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 70.0f
 #define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
 #define PITCH_STARTUP_MIN_VOLTAGE           8000.0f
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
 /* Positive feedforward counteracts gravity in the measured installation.
  * If bench testing shows it increases the downward pull, flip only this sign. */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         7000.0f
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         12000.0f
 #define PITCH_GRAVITY_ZERO_RAD            0.0f
 #define PITCH_GRAVITY_ANGLE_MIN_DEG      (-24.34f)
 #define PITCH_GRAVITY_ANGLE_MAX_DEG       (49.58f)
@@ -130,14 +130,14 @@
 #define YAW_MAX_SPEED_RAD_S               7.0f
 /* Yaw 目标轨迹，轨迹单位为输出轴弧度。 */
 #define YAW_TRAJECTORY_MAX_SPEED_RAD_S    6.5f
-#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   120.0f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   60.0f
 /* 1.0：直接使用规划速度做速度前馈。 */
 #define YAW_VELOCITY_FF_GAIN              1.00f
 /* 可直接调节的力矩前馈：单位为 CAN 电流命令单位/输出轴 rad/s²。
  * 正值表示输出轴正加速度，控制器会应用 YAW_MOTOR_COMMAND_SIGN。 */
 #define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 65.0f
 #define YAW_ACCELERATION_FF_CURRENT_LIMIT  16384.0f
-#define YAW_SPEED_KP_CURRENT_PER_RPM       180.0f
+#define YAW_SPEED_KP_CURRENT_PER_RPM       100.0f
 #define YAW_SPEED_KI_CURRENT_PER_RPM_S     15.0f
 #define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
 #define YAW_SPEED_INTEGRAL_LIMIT_CURRENT  16384.0f

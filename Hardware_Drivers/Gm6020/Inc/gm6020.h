@@ -3,7 +3,7 @@
 
 #include "motor_common.h"
 
-#define GM6020_VOLTAGE_LIMIT 30000.0f
+#define GM6020_VOLTAGE_LIMIT 25000.0f
 
 typedef struct
 {
@@ -12,6 +12,7 @@ typedef struct
     float voltage_feedforward;
     float filtered_speed_rpm;
     float speed_filter_alpha;
+    uint8_t speed_filter_initialized;
     DjiMotorFeedback_t feedback;
     MotorSpeedPid_t speed_pid;
 } GM6020_t;

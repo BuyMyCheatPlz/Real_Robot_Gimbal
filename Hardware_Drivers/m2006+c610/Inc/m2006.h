@@ -10,6 +10,7 @@ typedef struct
     float target_speed_rpm;
     float filtered_speed_rpm;
     float speed_filter_alpha;
+    uint8_t speed_filter_initialized;
     DjiMotorFeedback_t feedback;
     MotorSpeedPid_t speed_pid;
     uint32_t last_cmd_ms;   /* 最近一次 SetSpeed 时间；用于命令保活安全 */

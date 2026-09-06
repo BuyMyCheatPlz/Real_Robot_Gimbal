@@ -7,12 +7,12 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-/* 每帧 float 数按构建模式区分：正常模式(YAW_SYSID_MODE=0)=6，与原固件帧格式
- * 逐字节一致；辨识模式=8(追加 I6=电流指令、I7=yaw 原始速度)。 */
+/* 每帧 float 数按构建模式区分：正常模式=16(6 常规 + I6 调参解析计数 +
+ * I7~I15 CAN 诊断)；辨识模式=8(追加 I6=电流指令、I7=yaw 原始速度)。 */
 #if (YAW_SYSID_MODE != 0U)
 #define VOFA_CHANNEL_COUNT 8U
 #else
-#define VOFA_CHANNEL_COUNT 6U
+#define VOFA_CHANNEL_COUNT 16U
 #endif
 #define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
 #define VOFA_TX_LENGTH      (VOFA_PAYLOAD_LENGTH + 4U)
@@ -107,6 +107,24 @@ HAL_StatusTypeDef VOFA_SendControlFrame(
     return HAL_OK;
 }
 
+static void complete_command(void)
+{
+    if (assembling_length == 0U) return;
+    assembling_command[assembling_length] = '\0';
+    if (command_count >= VOFA_COMMAND_QUEUE_DEPTH)
+    {
+        command_read_index = (uint8_t)((command_read_index + 1U) %
+                                       VOFA_COMMAND_QUEUE_DEPTH);
+        --command_count;
+    }
+    memcpy(completed_command[command_write_index], assembling_command,
+           VOFA_COMMAND_MAX_LENGTH);
+    command_write_index = (uint8_t)((command_write_index + 1U) %
+                                    VOFA_COMMAND_QUEUE_DEPTH);
+    ++command_count;
+    assembling_length = 0U;
+}
+
 void VOFA_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
 {
     uint16_t index;
@@ -116,22 +134,7 @@ void VOFA_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
         char ch = (char)rx_dma_buffer[index];
         if ((ch == '\r') || (ch == '\n'))
         {
-            if (assembling_length != 0U)
-            {
-                assembling_command[assembling_length] = '\0';
-                if (command_count >= VOFA_COMMAND_QUEUE_DEPTH)
-                {
-                    command_read_index = (uint8_t)((command_read_index + 1U) %
-                                                   VOFA_COMMAND_QUEUE_DEPTH);
-                    --command_count;
-                }
-                memcpy(completed_command[command_write_index], assembling_command,
-                       VOFA_COMMAND_MAX_LENGTH);
-                command_write_index = (uint8_t)((command_write_index + 1U) %
-                                                VOFA_COMMAND_QUEUE_DEPTH);
-                ++command_count;
-                assembling_length = 0U;
-            }
+            complete_command();
         }
         else if (assembling_length < (VOFA_COMMAND_MAX_LENGTH - 1U))
         {
@@ -142,6 +145,9 @@ void VOFA_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t size)
             assembling_length = 0U;
         }
     }
+    /* 兼容无换行的命令(如 VOFA 滑条发 "PITCH_KP_POS=75.00" 不带 \n)：
+     * 本回调在 RX 空闲(或缓冲满)时触发，若仍累积内容则视作一条完整命令。 */
+    complete_command();
     (void)start_rx_dma();
 }
 
@@ -197,6 +203,22 @@ void VOFA_print(void *argument)
                 wake_tick = osKernelGetTickCount();
             continue;
         }
+#else
+        /* 在线调参回显计数：成功解析一次 +1，I6 通道可观测(不加=失败) */
+        channels[6] = (float)(int32_t)snapshot.param_parse_count;
+        /* CAN 诊断(判断离线/失控根因)：I7~I15
+         * I7 =总线错误总数, I8/I9 =CAN1/2 bus-off 次数,
+         * I10/I11 =CAN1/2 恢复次数, I12/I13 =CAN1/2 最后错误码,
+         * I14/I15 =CAN1/2 实收帧计数 */
+        channels[7]  = (float)snapshot.can_bus_error_count;
+        channels[8]  = (float)snapshot.can1_busoff_count;
+        channels[9]  = (float)snapshot.can2_busoff_count;
+        channels[10] = (float)snapshot.can1_recovery_count;
+        channels[11] = (float)snapshot.can2_recovery_count;
+        channels[12] = (float)snapshot.can1_last_error;
+        channels[13] = (float)snapshot.can2_last_error;
+        channels[14] = (float)snapshot.can1_rx_count;
+        channels[15] = (float)snapshot.can2_rx_count;
 #endif
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;

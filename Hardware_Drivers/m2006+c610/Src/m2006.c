@@ -35,9 +35,25 @@ void M2006_Decode(M2006_t *motor, const uint8_t data[8], uint32_t now_ms)
 int16_t M2006_Update(M2006_t *motor, float dt_s)
 {
     uint32_t now;
-    if ((motor == 0) || (motor->feedback.online == 0U)) return 0;
-    motor->filtered_speed_rpm += motor->speed_filter_alpha *
-        ((float)motor->feedback.speed_rpm - motor->filtered_speed_rpm);
+    if (motor == 0) return 0;
+    if (motor->feedback.online == 0U)
+    {
+        /* 与 DM4310(yaw) 一致：离线立即清积分与滤波状态，防止反馈时断时续时
+         * 速度环积分累积，恢复瞬间灌出猛电流导致拨盘疯转。 */
+        MotorSpeedPid_Reset(&motor->speed_pid);
+        motor->speed_filter_initialized = 0U;
+        return 0;
+    }
+    if (motor->speed_filter_initialized == 0U)
+    {
+        motor->filtered_speed_rpm = (float)motor->feedback.speed_rpm;
+        motor->speed_filter_initialized = 1U;
+    }
+    else
+    {
+        motor->filtered_speed_rpm += motor->speed_filter_alpha *
+            ((float)motor->feedback.speed_rpm - motor->filtered_speed_rpm);
+    }
     /* 命令保活安全：launch 任务每 ~2ms 调 SetSpeed。若超过 M2006_CMD_STALE_
      * TIMEOUT_MS 未刷新(任务卡死/崩溃)，立即断电，防止电机按最后目标疯转。 */
     now = HAL_GetTick();

@@ -51,7 +51,7 @@
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Process_Data */
@@ -65,21 +65,21 @@ const osThreadAttr_t Process_Data_attributes = {
 osThreadId_t PIDHandle;
 const osThreadAttr_t PID_attributes = {
   .name = "PID",
-  .stack_size = 512 * 4,
+  .stack_size = 1024 * 4,   /* PID_calc 局部变量多，2KB 偏紧易溢出导致 CAN 发送卡死+疯转 */
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for vofa */
 osThreadId_t vofaHandle;
 const osThreadAttr_t vofa_attributes = {
   .name = "vofa",
-  .stack_size = 256 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for launch */
 osThreadId_t launchHandle;
 const osThreadAttr_t launch_attributes = {
   .name = "launch",
-  .stack_size = 256 * 4,   /* 512B 偏小易溢出导致 launch 卡死(表现为 M2006 不更新+电机疯转) */
+  .stack_size = 512 * 4,   /* 1KB 仍偏小，加到 2KB 防 launch 卡死(表现为 M2006 不更新+电机疯转) */
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for Target_Angle */

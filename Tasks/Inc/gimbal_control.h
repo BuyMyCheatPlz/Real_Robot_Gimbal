@@ -102,10 +102,13 @@ typedef struct
     uint32_t can2_busoff_count;
     uint32_t can1_recovery_count;
     uint32_t can2_recovery_count;
+    uint32_t can1_last_error;
     uint32_t can2_last_error;
     uint32_t dm4310_feedback_count;
     uint32_t can2_tx_complete_count;
     uint32_t can2_tx_busy_count;
+    uint32_t can1_rx_count;
+    uint32_t can2_rx_count;
     uint16_t can2_last_rx_std_id;
     uint16_t yaw_encoder_count;
     uint8_t can_last_send_failure_mask;
@@ -139,6 +142,7 @@ typedef struct
     float sysid_command;         /* 给 DM4310 的直通电流指令 */
     float sysid_speed_rpm;       /* DM4310 原始速度反馈 rpm(不滤波) */
     uint8_t sysid_running;       /* yaw 辨识进行中 */
+    uint32_t param_parse_count;  /* 在线调参成功解析计数(+1=成功) */
 } GimbalControlState_t;
 
 extern volatile GimbalControlState_t gimbal_control_state;

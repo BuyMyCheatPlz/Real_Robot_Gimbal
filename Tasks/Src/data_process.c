@@ -108,12 +108,18 @@ static void process_vofa_commands(void)
             Gimbal_YawTest_Request(yaw_test_current);
             continue;
         }
-        if (PidParameter_Parse(command, &update) == 0U) continue;
+        if (PidParameter_Parse(command, &update) == 0U)
+        {
+            /* 解析失败：计数不加，I6 通道不变 */
+            continue;
+        }
         if (osMessageQueuePut(Update_PID_paraHandle, &update, 0U, 0U) != osOK)
         {
             (void)osMessageQueueGet(Update_PID_paraHandle, &discarded, 0, 0U);
             (void)osMessageQueuePut(Update_PID_paraHandle, &update, 0U, 0U);
         }
+        /* 回显计数：成功解析一次 +1，VOFA I6 通道可观测 */
+        ++gimbal_control_state.param_parse_count;
     }
 }
 

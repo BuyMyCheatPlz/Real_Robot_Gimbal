@@ -42,9 +42,25 @@ void GM6020_Decode(GM6020_t *motor, const uint8_t data[8], uint32_t now_ms)
 int16_t GM6020_Update(GM6020_t *motor, float dt_s)
 {
     float output;
-    if ((motor == 0) || (motor->feedback.online == 0U)) return 0;
-    motor->filtered_speed_rpm += motor->speed_filter_alpha *
-        ((float)motor->feedback.speed_rpm - motor->filtered_speed_rpm);
+    if (motor == 0) return 0;
+    if (motor->feedback.online == 0U)
+    {
+        /* 与 DM4310(yaw) 一致：离线立即清积分与滤波状态，防止反馈时断时续时
+         * 速度环积分累积，恢复瞬间灌出猛电压导致 pitch 疯转。 */
+        MotorSpeedPid_Reset(&motor->speed_pid);
+        motor->speed_filter_initialized = 0U;
+        return 0;
+    }
+    if (motor->speed_filter_initialized == 0U)
+    {
+        motor->filtered_speed_rpm = (float)motor->feedback.speed_rpm;
+        motor->speed_filter_initialized = 1U;
+    }
+    else
+    {
+        motor->filtered_speed_rpm += motor->speed_filter_alpha *
+            ((float)motor->feedback.speed_rpm - motor->filtered_speed_rpm);
+    }
     output = (float)MotorSpeedPid_Calculate(&motor->speed_pid,
                                             motor->target_speed_rpm,
                                             motor->filtered_speed_rpm, dt_s) +
