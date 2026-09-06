@@ -2,9 +2,9 @@
 #define TASK_CONFIG_H
 
 /* ---------------- 任务周期与安全保护 ---------------- */
-#define CONTROL_PERIOD_S                  0.004f
-#define CONTROL_PERIOD_TICKS              4U
-#define CAN_COMMAND_PERIOD_MS             10U
+#define CONTROL_PERIOD_S                  0.001f
+#define CONTROL_PERIOD_TICKS              1U
+#define CAN_COMMAND_PERIOD_MS             1U
 #define CAN_TX_STUCK_ABORT_MS             20U   /* 邮箱被未ACK帧卡住超过此时长则中止释放 */
 #define DATA_PROCESS_PERIOD_MS            1U
 #define DBUS_TIMEOUT_MS                   100U
@@ -45,10 +45,13 @@
 #define IMU_ACCEL_X_SIGN                  1.0f
 #define IMU_ACCEL_Y_SIGN                  1.0f
 #define IMU_ACCEL_Z_SIGN                  1.0f
-#define IMU_GYRO_ROLL_AXIS                0U
-#define IMU_GYRO_PITCH_AXIS               1U
-#define IMU_GYRO_YAW_AXIS                 2U
-#define IMU_GYRO_ROLL_SIGN                1.0f
+#define IMU_GYRO_ROLL_AXIS                2U
+/* 实测：X 轴(0)显示为 pitch 且向下为正，Y 轴(1)为 yaw，因此：
+ * pitch=X(0)、yaw=Y(1)、roll=Z(2)。
+ * 符号：pitch 用 X 轴(向下为正)；roll 用 Z 轴，取反使其与加速度计(右倾为正)一致。 */
+#define IMU_GYRO_PITCH_AXIS               0U
+#define IMU_GYRO_YAW_AXIS                 1U
+#define IMU_GYRO_ROLL_SIGN               -1.0f
 #define IMU_GYRO_PITCH_SIGN               1.0f
 #define IMU_GYRO_YAW_SIGN                 1.0f
 #define ATTITUDE_ACCEL_WEIGHT             0.010f
@@ -89,13 +92,13 @@
 /* ---------------- Pitch：GM6020 外位置环 + 内速度环 ---------------- */
 #define PITCH_GM6020_CAN_ID                2U
 #define PITCH_GRAVITY_ONLY_ENABLE          0U
-#define PITCH_ANGLE_KP_RPM_PER_RAD        75.0f
+#define PITCH_ANGLE_KP_RPM_PER_RAD        800.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
-#define PITCH_ANGLE_KD_RPM_S_PER_RAD      2.5f
+#define PITCH_ANGLE_KD_RPM_S_PER_RAD      32.5f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
 #define PITCH_MAX_SPEED_RPM                90.0f
-#define PITCH_SPEED_KP                    70.0f
-#define PITCH_SPEED_KI                     4.0f
+#define PITCH_SPEED_KP                    100.0f
+#define PITCH_SPEED_KI                     10.0f
 #define PITCH_SPEED_KD                    0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT         12000.0f
 #define PITCH_SPEED_OUTPUT_LIMIT           25000.0f
@@ -103,13 +106,27 @@
 #define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
 #define PITCH_STARTUP_MIN_VOLTAGE           8000.0f
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
-/* Positive feedforward counteracts gravity in the measured installation.
- * If bench testing shows it increases the downward pull, flip only this sign. */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         12000.0f
-#define PITCH_GRAVITY_ZERO_RAD            0.0f
+/* 目标死区：位置误差小于该角(°)时位置环输出 0，靠重力前馈+速度环把轴稳住，
+ * 防止齿距(背隙)在目标附近引起高频抖动。设 0 关闭死区；抖得凶就调大，但过大
+ * 会降低到位精度(一般略大于背隙即可)。 */
+#define PITCH_POSITION_DEADZONE_RAD         (0.5f * TASK_DEG_TO_RAD)
+/* 实测机械限位(IMU 角度，rad)：-2.4260 ≈ -139°(向上最大)，-1.1170 ≈ -64°(向下最大)。
+ * 卡限幅检测(仅正常模式，gravity_only 不启用)：位置环给了大速度指令但 IMU 角速度
+ * 很小 → 判定顶死在机械限位，把目标回锚到当前编码器位置。 */
+#define PITCH_LIMIT_MIN_RAD                (-2.4260f)
+#define PITCH_LIMIT_MAX_RAD                (-1.1170f)
+#define PITCH_LIMIT_STALL_CMD_RPM          30.0f   /* 速度指令大于此值(rpm)判定在推 */
+#define PITCH_LIMIT_STALL_SPEED_RAD_S      0.3f    /* IMU 角速度小于此值(rad/s)判定没动 */
+#define PITCH_LIMIT_STALL_TIME_MS          150U    /* 卡限幅持续此时长才回锚(防阶跃起步误判) */
+#define PITCH_HOME_STABLE_TIME_MS          200U    /* 回零到位：水平死区内稳定此时长判定到达 */
+/* 重力前馈电压上限/默认值(与 GM6020 电压命令上限一致)。实际前馈电压 =
+ * 该值 × PITCH_GRAVITY_SIGN × sin(pitch)，在 PITCH_GRAVITY_ANGLE_MIN/MAX 区间外为 0。
+ * 若实测越加越往下掉，先取反 PITCH_GRAVITY_SIGN，而不是用负值命令。 */
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         25000.0f
+#define PITCH_GRAVITY_ZERO_RAD            (-1.5708f)  /* =-90°：IMU pitch 的水平(重力零)参考 */
 #define PITCH_GRAVITY_ANGLE_MIN_DEG      (-24.34f)
 #define PITCH_GRAVITY_ANGLE_MAX_DEG       (49.58f)
-#define PITCH_GRAVITY_SIGN               -1.0f
+#define PITCH_GRAVITY_SIGN               1.0f
 #define PITCH_MOTOR_SIGN                  1.0f
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
@@ -177,14 +194,14 @@
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
- * 电机轴转速环。KP=10 保守抑制极限环。输出限幅放满 10A：推弹瞬间负载大，
- * 8A 不够顶会掉速、弹丸顶开后积分+饱和 P 又把电机猛冲到 5570rpm(超指令)，
- * 猛撞下一颗弹导致卡死(I5 冻结)。满电流让推弹更稳、掉速更小。
- * 积分 KI=2、限幅 2000 防 windup 超速；分离=0 始终积分扛负载。 */
-#define LAUNCH_M2006_ID5_SPEED_KP         10.0f
-#define LAUNCH_M2006_ID5_SPEED_KI         2.0f
+ * 电机轴转速环。输出限幅放满 10A：推弹瞬间负载大，8A 不够顶会掉速。
+ * 之前 KP=10/KI=2 偏保守导致"实际比目标少 1~2 颗"(连发稳态掉速+起步滞后)，
+ * 这里把 KP 提到 12、KI 提到 3、积分限幅 2000→3000，让速度环更跟手、稳态误差更小。
+ * 注意别再加太多，否则弹丸顶开后积分+饱和 P 会把电机猛冲过 4800 撞下一颗弹。 */
+#define LAUNCH_M2006_ID5_SPEED_KP         12.0f
+#define LAUNCH_M2006_ID5_SPEED_KI         3.0f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   2000.0f
+#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   3000.0f
 #define LAUNCH_M2006_ID5_OUTPUT_LIMIT     10000.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 0.0f
 /* 速度滤波 alpha：0.8 滞后小(~2.5ms)，避免快电机刹车前冲过指令速度。 */
@@ -203,10 +220,10 @@
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
 #define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 40.0f  /* 输出°→电机rpm：10°误差→400rpm */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   250.0f /* 单动接近速度降到 250，减速更从容 */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   1000.0f /* 单动接近速度：250 太慢(约1s/发)，提到 1000(约0.3s/发) */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5000.0f /* 连发档限速：需追 4800rpm 目标 */
 #define LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS   50U        /* 连发档步进周期 = 20Hz */
-#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    4.0f  /* 到位死区：误差<4°断电靠摩擦停 */
+#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    1.5f  /* 到位死区：4°太大每发都短2~3°，累积成"少1~2颗"；收到1.5°让拨盘转到位 */
 #define M2006_STOP_DEADBAND_RPM                5.0f  /* M2006 速度环断电阈值(rpm) */
 #define M2006_CMD_STALE_TIMEOUT_MS             100U  /* 命令保活：launch 卡死则断电 */
 

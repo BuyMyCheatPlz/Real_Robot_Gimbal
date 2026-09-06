@@ -13,6 +13,8 @@ typedef struct
     float filtered_speed_rpm;
     float speed_filter_alpha;
     uint8_t speed_filter_initialized;
+    uint8_t use_external_speed_feedback;  /* 1=速度环反馈用外部(如 BMI 陀螺)，而非编码器 */
+    float external_speed_rpm;             /* 外部速度反馈(rpm)，与编码器转速同号 */
     DjiMotorFeedback_t feedback;
     MotorSpeedPid_t speed_pid;
 } GM6020_t;

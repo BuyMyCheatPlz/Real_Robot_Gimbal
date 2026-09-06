@@ -7,12 +7,14 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-/* 每帧 float 数按构建模式区分：正常模式=16(6 常规 + I6 调参解析计数 +
- * I7~I15 CAN 诊断)；辨识模式=8(追加 I6=电流指令、I7=yaw 原始速度)。 */
+/* 每帧 float 数按构建模式区分：正常模式=12(前 4 路云台角 + I4 目标发弹量、
+ * I5 实际发弹数、I6/I7 两个 M3508 转速、I8 已配置前馈电压、I9 实际 GM6020 命令、
+ * I10 CAN 发送故障、I11 IMU 解算 pitch)；
+ * 辨识模式=8(I6=电流指令、I7=yaw 原始速度)。 */
 #if (YAW_SYSID_MODE != 0U)
 #define VOFA_CHANNEL_COUNT 8U
 #else
-#define VOFA_CHANNEL_COUNT 16U
+#define VOFA_CHANNEL_COUNT 12U
 #endif
 #define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
 #define VOFA_TX_LENGTH      (VOFA_PAYLOAD_LENGTH + 4U)
@@ -204,21 +206,20 @@ void VOFA_print(void *argument)
             continue;
         }
 #else
-        /* 在线调参回显计数：成功解析一次 +1，I6 通道可观测(不加=失败) */
-        channels[6] = (float)(int32_t)snapshot.param_parse_count;
-        /* CAN 诊断(判断离线/失控根因)：I7~I15
-         * I7 =总线错误总数, I8/I9 =CAN1/2 bus-off 次数,
-         * I10/I11 =CAN1/2 恢复次数, I12/I13 =CAN1/2 最后错误码,
-         * I14/I15 =CAN1/2 实收帧计数 */
-        channels[7]  = (float)snapshot.can_bus_error_count;
-        channels[8]  = (float)snapshot.can1_busoff_count;
-        channels[9]  = (float)snapshot.can2_busoff_count;
-        channels[10] = (float)snapshot.can1_recovery_count;
-        channels[11] = (float)snapshot.can2_recovery_count;
-        channels[12] = (float)snapshot.can1_last_error;
-        channels[13] = (float)snapshot.can2_last_error;
-        channels[14] = (float)snapshot.can1_rx_count;
-        channels[15] = (float)snapshot.can2_rx_count;
+        /* I6/I7 = 两个 M3508 摩擦轮电机实测转速(rpm) */
+        channels[6] = snapshot.m3508_id2_speed_rpm;
+        channels[7] = snapshot.m3508_id3_speed_rpm;
+        /* I8 = 已配置的前馈电压(pitch_gravity_ff_voltage)。发 PITCH_GRAVITY_FF=值
+         * 后此通道应变为该值；不变说明命令没解析/没送达 PID 任务。 */
+        channels[8] = snapshot.pitch_gravity_ff_setting;
+        /* I9 = 实际发给 GM6020 的命令(速度环 + 前馈后的最终电压)。前馈生效时应是
+         * 一个非零大值(随角度变)；恒为 0 说明控制未授权/前馈没发出去。 */
+        channels[9] = (float)snapshot.pitch_can_command;
+        /* I10 = CAN 发送故障：0=健康，1=故障锁存或连续失败(此时控制不授权、前馈被停) */
+        channels[10] = (float)snapshot.can_tx_fault;
+        /* I11 = IMU 解算 pitch(rad→°)。应和 I1(编码器 pitch)基本一致；若差很大说明
+         * 轴映射/姿态解算还没对，前馈自然对不上。 */
+        channels[11] = snapshot.imu_pitch_rad * 57.295779513082320876f;
 #endif
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;

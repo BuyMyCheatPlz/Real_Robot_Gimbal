@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define VOFA_COMMAND_MAX_LENGTH 48U
-#define VOFA_CONTROL_CHANNEL_COUNT 16U
+#define VOFA_CONTROL_CHANNEL_COUNT 12U
 
 HAL_StatusTypeDef VOFA_Init(UART_HandleTypeDef *huart);
 uint8_t VOFA_GetCommand(char command[VOFA_COMMAND_MAX_LENGTH]);

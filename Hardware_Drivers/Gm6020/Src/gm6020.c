@@ -42,6 +42,7 @@ void GM6020_Decode(GM6020_t *motor, const uint8_t data[8], uint32_t now_ms)
 int16_t GM6020_Update(GM6020_t *motor, float dt_s)
 {
     float output;
+    float speed_feedback_rpm;
     if (motor == 0) return 0;
     if (motor->feedback.online == 0U)
     {
@@ -51,15 +52,20 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
         motor->speed_filter_initialized = 0U;
         return 0;
     }
+    /* 速度环反馈源：默认用编码器转速；若启用外部反馈(如 BMI 陀螺 pitch 角速度)，
+     * 则改用外部反馈——陀螺直接测云台真实角速度，不受减速/背隙/柔性影响，稳得更快。 */
+    speed_feedback_rpm = (motor->use_external_speed_feedback != 0U) ?
+                         motor->external_speed_rpm :
+                         (float)motor->feedback.speed_rpm;
     if (motor->speed_filter_initialized == 0U)
     {
-        motor->filtered_speed_rpm = (float)motor->feedback.speed_rpm;
+        motor->filtered_speed_rpm = speed_feedback_rpm;
         motor->speed_filter_initialized = 1U;
     }
     else
     {
         motor->filtered_speed_rpm += motor->speed_filter_alpha *
-            ((float)motor->feedback.speed_rpm - motor->filtered_speed_rpm);
+            (speed_feedback_rpm - motor->filtered_speed_rpm);
     }
     output = (float)MotorSpeedPid_Calculate(&motor->speed_pid,
                                             motor->target_speed_rpm,

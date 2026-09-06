@@ -194,8 +194,12 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     sample_count = bmi088.sample_count;
     if (primask == 0U) __enable_irq();
     if (sample_count == estimator->sample_count) return 0U;
-    roll_acc = atan2f(ay, az);
-    pitch_acc = atan2f(-ax, sqrtf(ay * ay + az * az));
+    /* 这颗 BMI088 转了 90°(Y 轴朝上)，pitch 是绕 X 轴转、roll 是绕 Z 轴转。
+     * 因此姿态角参考 Y 轴(垂直)：
+     *   pitch = atan2(-az, ay)：前向轴 Z 相对垂直轴的倾斜；
+     *   roll  = atan2(-ax, ay)：左右轴 X 相对垂直轴的倾斜。 */
+    roll_acc = atan2f(-ax, ay);
+    pitch_acc = atan2f(-az, ay);
 
     if (estimator->initialized == 0U)
     {
@@ -222,6 +226,7 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     message->roll_rad = estimator->roll;
     message->pitch_rad = estimator->pitch;
     message->yaw_rad = estimator->yaw;
+    message->pitch_rate_rad_s = gy;
     message->timestamp_ms = now;
     message->flags |= GIMBAL_MSG_ATTITUDE;
     return 1U;

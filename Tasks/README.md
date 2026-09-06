@@ -7,6 +7,8 @@
 - 原子读取 BMI088 DMA 完整采样结果。
 - 推进等待中的 BMI088 DMA 阶段，并在单段超时后执行任务态恢复。
 - 使用加速度计和陀螺仪互补滤波计算 Roll、Pitch，并积分得到相对 Yaw。
+  该 BMI088 转了 90°（Y 轴朝上），姿态角参考垂直轴 Y：pitch=atan2(-az,ay)、
+  roll=atan2(-ax,ay)，轴映射见 `config.h` 的 `IMU_*`。
 - 处理大疆 D-BUS 遥控数据和失联状态。
 - 检测 CH6～CH9 突变，生成 Pitch/Yaw 的 ±30° 增量命令。
 - 将姿态和角度增量通过 `Target_Angle` 队列发送给 `PID_calc`。
@@ -17,12 +19,20 @@
 
 `PID_calc` 以 1 kHz 运行：
 
-- Pitch 使用 GM6020 编码器展开角度作为实际值，经过低通滤波后进入位置环；
-  位置环输出目标转速，再进入 GM6020 速度 PID。
-- BMI088 解算出的 Pitch 用于计算余弦重力电压前馈。
+- Pitch 位置环用 GM6020 编码器展开角度作为实际值（上电/遥控重连时以 BMI Pitch
+  建立零偏）；上电回零目标 = IMU 水平(`PITCH_GRAVITY_ZERO_RAD`=-90°)。位置环输出
+  目标转速，进入 GM6020 速度 PID。
+- Pitch 位置环带目标死区（`PITCH_POSITION_DEADZONE_RAD`，默认 0.5°）：误差小于死区时
+  位置环输出 0 并复位位置 PID，靠重力前馈+速度环稳住，防止齿距背隙在目标附近高频抖动。
+- Pitch 目标直接钳位到实测机械限位（`PITCH_LIMIT_MIN_RAD`/`PITCH_LIMIT_MAX_RAD`，
+  编码器角度 -125°~-52.37°），不靠卡限位检测。
+- Pitch 速度环反馈默认用 BMI088 陀螺 pitch 角速度（rad/s→rpm），直接测云台真实
+  角速度，不受减速/背隙/柔性影响；GM6020 编码器转速作为复位/离线时的回落反馈。
+- BMI088 解算出的 Pitch（带 -90° 零偏，水平=0）用于计算正弦重力电压前馈
+  （符号/幅值由 `PITCH_GRAVITY_*` 宏配置）。
 - IMU Yaw 归一化为 `[-180°, +180°)`；DM4310 编码器 yaw 保持连续展开，
   因而控制过编码器零点时不会跳变。
-- 上电时使用首次 BMI Pitch 给 GM6020 编码器建立零偏，Pitch 目标设为 0°。
+- 上电时使用首次 BMI Pitch 给 GM6020 编码器建立零偏，Pitch 目标设为 IMU 水平(-90°)。
 - `YAW_COMMISSIONING_MODE=0` 时两个云台轴允许输出；
   `LAUNCH_MOTOR_OUTPUT_ENABLE=0` 会继续向发射机构发送零命令，避免调试云台时误启动。
 - Yaw 使用 DM4310 编码器位置作为实际值。限速度、限加速度轨迹同时生成位置、
@@ -77,9 +87,8 @@ S2=1 时两颗 M3508 停止，S2=2 使用低速目标，S2=3 使用最高速目�
 `LAUNCH_M3508_ID2_DIRECTION`、`LAUNCH_M3508_ID3_DIRECTION` 设置。任意一颗
 掉线都会同时停止两颗电机。
 
-S1 控制 M2006 ID5：S1=1 角度环保持当前位置；S1=2 连发（串级角度环：目标角每
-`LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS`=50ms 步进 `LAUNCH_M2006_ID5_STEP_DEG`=40°，
-即 20Hz，每发位置锁定）；S1=3 单动（角度环，每次从 1 拨到 3 触发一步 40° 输出，
+S1 控制 M2006 ID5：S1=1 角度环保持当前位置；S1=2 连发（纯速度环
+4800 rpm≈20 Hz）；S1=3 单动（角度环，每次从 1 拨到 3 触发一步 40° 输出，
 电机转 4 圈）。M2006 离线时不会释放启动信号量。
 
 三颗发射电机都有独立的速度 PID、速度低通、积分限幅、输出限幅和方向配置；
@@ -87,35 +96,68 @@ M2006 额外有角度环（编码器在电机轴，拨盘在 P36 输出端，36:
 
 ## VOFA 与在线调参
 
-UART4 使用 115200 波特率和 RX/TX DMA。`vofa` 任务以绝对节拍每 10 ms 发送 6 个
-JustFloat 通道（前 4 个为目标/实际角 rad→°，后 2 个为 M2006 目标/实际发弹数），
-帧尾为 `00 00 80 7F`：
+UART4 使用 115200 波特率和 RX/TX DMA。`vofa` 任务以绝对节拍每 10 ms 发送 9 个
+JustFloat 通道，帧尾为 `00 00 80 7F`：
 
-| VOFA 通道 | 内容 |
+| VOFA 通道 | 正常模式内容 |
 |---|---|
 | 1 | Pitch 目标角，° |
 | 2 | Pitch 实际角，° |
 | 3 | Yaw 目标角，° |
 | 4 | Yaw 实际角，° |
-| 5 | M2006 目标发弹数（指令累计） |
-| 6 | M2006 实际发弹数（输出旋转/40°） |
+| 5 | M2006 目标发弹数（整数） |
+| 6 | M2006 实际发弹数（整数） |
+| 7 | M3508 ID2 实测转速，rpm |
+| 8 | M3508 ID3 实测转速，rpm |
+| 9 | 调参解析计数（每成功解析一条串口命令 +1） |
+
+`YAW_SYSID_MODE=1` 辨识固件时，通道 7/8 改为：7=给 DM4310 的电流指令、8=yaw 原始
+速度(rpm)，且仅在辨识运行期间打印，运行结束自动静默。
 
 若单次发送或调度导致 deadline 已过期，任务会以当前 tick 重建下一帧的绝对节拍，
 不会连续补发历史帧。
 
-UART4 命令接收保持开启。
+UART4 命令接收保持开启（无换行时按接收空闲自动结束一条命令）。支持以下 ASCII 命令：
 
-支持以下以回车或换行结尾的分轴 ASCII 命令：
+**在线调参（`键=值`，大写无空格，值 0~100000）**
 
-- `PITCH_KP_POS=20`、`PITCH_KI_POS=0`、`PITCH_KD_POS=2`
-- `PITCH_KP_SPD=10`、`PITCH_KI_SPD=0`、`PITCH_KD_SPD=0`
-- `PITCH_GRAVITY_FF=1500`
-- `YAW_KP_POS=0.5`、`YAW_KI_POS=0`、`YAW_KD_POS=0`
-- `YAW_KP_SPD=2`、`YAW_KI_SPD=0`、`YAW_KD_SPD=0`
+- `PITCH_KP_POS` / `PITCH_KI_POS` / `PITCH_KD_POS`：Pitch 位置环
+- `PITCH_KP_SPD` / `PITCH_KI_SPD` / `PITCH_KD_SPD`：Pitch 速度环
+- `YAW_KP_POS` / `YAW_KI_POS` / `YAW_KD_POS`：Yaw 位置环
+- `YAW_KP_SPD` / `YAW_KI_SPD` / `YAW_KD_SPD`：Yaw 速度环
+- `PITCH_GRAVITY_FF`（别名 `PITCH_GRAVITY_FF_MAX_VOLTAGE`）：Pitch 重力前馈电压幅值
 
-每条命令只修改指定轴、指定环路。旧的无轴名命令（例如 `KP_POS=...`）会被拒绝，
-避免意外同时改变两轴。在线命令只修改运行时 PID，`config.h` 中的宏仍作为下一次
-复位后的初始值。
+**调试命令**
+
+- `YAWTEST=电流`：Yaw 方向测试，输出固定电流（幅值限 `YAW_DIRECTION_TEST_MAX_CURRENT`，
+  持续 `YAW_DIRECTION_TEST_DURATION_MS`）。
+- `identify_on`：仅 `YAW_SYSID_MODE=1` 时有效，触发一次 yaw 线性扫频正弦辨识。
+
+每条调参命令只修改指定轴、指定环路。旧的无轴名命令（例如 `KP_POS=...`）会被拒绝。
+在线命令只修改运行时 PID，`config.h` 中的宏仍作为下次复位后的初始值。
+
+## 调试/操作宏
+
+以下宏集中在 `Tasks/Inc/config.h`，改后需重新编译烧录：
+
+| 宏 | 取值 | 作用 |
+|---|---|---|
+| `YAW_SYSID_MODE` | 0/1 | 0=正常闭环；1=yaw 系统辨识固件（pitch 不输出、yaw 直通正弦扫频，`identify_on` 触发，I6=电流指令、I7=原始速度） |
+| `PITCH_GRAVITY_ONLY_ENABLE` | 0/1 | 0=正常 Pitch 位置环；1=仅重力前馈（位置环旁路、速度目标=0），用于单独调试重力前馈 |
+| `YAW_COMMISSIONING_MODE` | 0/1 | 0=双轴+发射正常；1=仅调试 yaw（pitch 与发射停发命令） |
+| `LAUNCH_MOTOR_OUTPUT_ENABLE` | 0/1 | 发射机构（M3508/M2006）是否允许输出；调试云台时设 0 防误启动 |
+| `YAW_CLOSED_LOOP_ENABLE` | 0/1 | 0=Yaw 开环（配合 `YAWTEST` 方向测试）；1=Yaw 位置闭环 |
+| `YAW_HOME_TO_IMU_ZERO_ON_AUTHORIZE` | 0/1 | 0=授权时保持当前 Yaw；1=授权/遥控重连时自动回 BMI Yaw 零点 |
+
+Yaw 系统辨识参数：`YAW_SYSID_AMPLITUDE_CURRENT`（扫频幅值）、
+`YAW_SYSID_FREQ_START_HZ`、`YAW_SYSID_FREQ_END_HZ`、`YAW_SYSID_DURATION_MS`（单次时长）。
+
+Pitch 重力前馈参数：`PITCH_GRAVITY_FF_MAX_VOLTAGE`（电压幅值，运行时可由
+`PITCH_GRAVITY_FF` 命令覆盖）、`PITCH_GRAVITY_ZERO_RAD`（水平零点，默认 -90°）、
+`PITCH_GRAVITY_SIGN`（符号，方向反了会往下掉，取反即可）。
+
+Pitch 机械限位：`PITCH_LIMIT_MIN_RAD`（向下最大，编码器 -125°）、
+`PITCH_LIMIT_MAX_RAD`（向上最大，编码器 -52.37°），目标直接钳位到该区间。
 
 ## 集中参数配置
 

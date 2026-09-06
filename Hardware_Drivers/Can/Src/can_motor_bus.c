@@ -263,6 +263,8 @@ static void reset_pitch_control(void)
     MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
     can1_gm6020_id2.filtered_speed_rpm =
         (float)can1_gm6020_id2.feedback.speed_rpm;
+    can1_gm6020_id2.use_external_speed_feedback = 0U;  /* 复位后回落到编码器反馈 */
+    can1_gm6020_id2.external_speed_rpm = 0.0f;
 }
 
 static void reset_yaw_control(void)
