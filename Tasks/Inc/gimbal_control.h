@@ -31,7 +31,8 @@ typedef struct
     float roll_rad;
     float pitch_rad;
     float yaw_rad;
-    float pitch_rate_rad_s;   /* BMI 陀螺 pitch 角速度(rad/s)，供 pitch 速度环反馈 */
+    float roll_rate_rad_s;    /* BMI 陀螺 Roll 角速度(rad/s)，本机 Pitch 速度环反馈 */
+    float pitch_rate_rad_s;   /* BMI 陀螺 Pitch 角速度(rad/s)，供姿态诊断 */
     float pitch_delta_rad;
     float yaw_delta_rad;
     uint32_t timestamp_ms;

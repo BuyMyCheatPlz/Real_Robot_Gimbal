@@ -7,7 +7,7 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-/* 帧格式固定为 8 路：Pitch/Yaw 目标实际角、发弹目标实际数、两颗 M3508 转速。
+/* 帧格式固定为 8 路：Pitch/Yaw 目标实际角、M2006 目标/实际输出角度、两颗 M3508 转速。
  * 发送长度必须与 channels 数组共用同一个通道数宏，避免把未初始化栈数据发出。 */
 #define VOFA_CHANNEL_COUNT VOFA_CONTROL_CHANNEL_COUNT
 #define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
@@ -183,9 +183,9 @@ void VOFA_print(void *argument)
         channels[1] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
         channels[2] = snapshot.yaw_target_rad * 57.295779513082320876f;
         channels[3] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
-        /* M2006 发弹数：目标/实际，取整(发弹量是整数)。 */
-        channels[4] = (float)(int32_t)snapshot.m2006_target_rounds;
-        channels[5] = (float)(int32_t)snapshot.m2006_actual_rounds;
+        /* M2006 拨盘：目标/实际输出角度曲线(°) */
+        channels[4] = snapshot.m2006_target_deg;
+        channels[5] = snapshot.m2006_actual_deg;
         /* I6/I7 = 两个 M3508 摩擦轮电机实测转速(rpm) */
         channels[6] = snapshot.m3508_id2_speed_rpm;
         channels[7] = snapshot.m3508_id3_speed_rpm;

@@ -4,6 +4,64 @@
 工程包含 CAN 电机驱动、BMI088 姿态解算、大疆 D-BUS 遥控（DR16/DT7 接收器）、双环 PID、重力与
 速度前馈、VOFA JustFloat 波形输出、串口在线调参以及电机和遥控器失联保护。
 
+## 0. Pitch 调参 / 问题修复记录（近期，重要）
+
+> 详细逐步对比见 [PITCH链路对比_cloud-platform-main_vs_Real_Robot_Gimbal.md](PITCH链路对比_cloud-platform-main_vs_Real_Robot_Gimbal.md)。
+
+### 0.1 抖动治理（保持段 ~3.3~3.6 Hz 极限环）
+- 关闭 GM6020“起步助推”bang-bang 继电器：`PITCH_STARTUP_MIN_VOLTAGE` 8000→**0**。
+  该继电器会把小速度指令强制成 ±8000 满力矩来回切换，是“怎么调 PID 都抖”的主因。
+- 速度环积分分离 70→**5**（逼近模板 dz=5），减少全带积分带来的相位滞后。
+- `pitch.csv` 佐证：抖动为固定频率极限环、与增益无关。
+
+### 0.2 D 项语义与模板(cloud-platform-main pid.c)对齐
+- 模板 D = `kd*(e[k]-e[k-1])`（每 1 ms 拍误差差量，**不除以 dt**）；
+  原实现 `-(meas-prev)/dt` 会把同数值放大 ~1000 倍 → 一加 D 就满幅抖振。
+- `MotorSpeedPid`（速度环）与 `PositionPid_t`（位置环）均已改为每拍差量语义。
+- 数值：`PITCH_SPEED_KD=60.85`（模板值）；`PITCH_ANGLE_KD=500`（外环阻尼 ≈0.5）；
+  `YAW_ANGLE_KD` 0.10→**100**（纯等值重标定，yaw 行为不变）。
+
+### 0.3 遥控
+- Pitch 方向宏 `PITCH_STICK_DIR=-1`（`data_process.c` 使用；向上打 pitch 向下 → 取反）。
+- 当前通道：pitch=`channel[3]`(CH4)、yaw=`channel[0]`(CH1)，摇杆越死区一次 ±30°。
+  （下文旧版第 4/7 节里“CH6~CH9 突变步进”的叙述为早期实现，已由本条摇杆越死区步进取代。）
+
+### 0.4 yaw–pitch 解耦（yaw 转动让 pitch 误动的修正）
+- 由于 pitch 速度环反馈用 BMI Roll(芯片 Z) 陀螺，yaw(芯片 Y)转动会因安装非正交残余漏进该通道。
+- **方案：只在收到 yaw 遥控指令后锁存 pitch**（两轴不会同时指令）：
+  `PITCH_LATCH_AFTER_YAW_CMD_MS=500`、`PITCH_LATCH_YAW_SETTLED_DEG=0.5`；
+  GM6020 新增 `output_hold/held_output/last_output`；失权/故障/复位自动清锁存。
+- 备选：`PITCH_ROLL_YAW_CROSS_RATE=0`，在线命令 `PITCH_YAW_CROSS=±x` 做陀螺通道串扰补偿。
+
+### 0.5 限幅放开（除积分） + Pitch 阶跃轨迹（目标 30°/≤200ms/超调≤0.2°）
+- `PITCH_MAX_SPEED_RPM` 90→1200（位置环输出上限，实际速度由轨迹约束）；
+- `PITCH_SOFT_LIMIT_DEG` 90→0（需配合 `pid_calc.c` 的 `DEG>0` 判断，否则 0 会把目标夹死在
+  home±0 → 遥控加的目标全被清 0、pitch 不动，此为已修复的 bug）；
+- `PITCH_SPEED_OUTPUT_LIMIT` / `GM6020_VOLTAGE_LIMIT` 25000→**30000**（力矩饱和放开）；
+- 位置环积分限 30、速度环积分限 12000、积分分离 5：**保持不动**；
+- 新增 Pitch 有限加速度轨迹（仿 yaw，`pid_calc.c` 位置环跟踪 `pitch_profile_target` +
+  速度前馈）：`PITCH_TRAJECTORY_MAX_SPEED_RAD_S=6.0`、`_MAX_ACCEL_RAD_S2=70.0`、
+  `PITCH_TRAJ_VEL_FF_GAIN=1.0`。
+
+### 0.6 现场数据结论（`pitch.csv`）与下一步
+- 实测 30° 阶跃到达时间够快（~150 ms 越零），但**过冲到 -48°**、~5 Hz 欠阻尼振荡、
+  ~1.1 s 才稳定 ±0.06° → 轴跟不上轨迹减速（到目标仍 ~400°/s，过冲 ∝ 速度²）。
+- 本轮已调：轨迹速度 8→**6 rad/s**、加速度 80→**70 rad/s²**（30° 理论 ~0.17 s 仍达标）、
+  外环阻尼 300→**500**（≈0.5）、速度反馈滤波 0.8→**1.0**（恢复速度环跟踪带宽，同模板）。
+- 复测后若仍有 >0.2° 超调：继续加 `PITCH_ANGLE_KD` 或降加速度；若 >200 ms：
+  先提加速度(→90)再提速度(6→7)，别只提速度。
+- 若 +30° 方向实测到不了 ~30°（停在 ~26° 附近），优先检查该方向机械限位/线束干涉。
+
+### 0.7 发射机构（M2006）
+- VOFA I4/I5 改为打印 **M2006 拨盘目标/实际输出角度曲线(°)**
+  （`vofa.c` 用 `m2006_target_deg/m2006_actual_deg`，不再打印发弹数）。
+- 目标角度阶梯（`launch.c`）：单发 S1:1→3 触发 +40°；**连发 S1=2 时角度环作为锁相环**——
+  目标相位按 40°/50ms(=800°/s)连续推进，速度指令 = 基准 4800rpm + 相位误差×
+  `LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG(60)`，I4 按 40° 取整成阶梯，I5 为实际曲线。
+- 单发响应提速：`LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG` 40→**100**、
+  `LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM` 1000→**4800**（与连发同速，单发 40° 理论 ~50 ms，
+  实测目标 ~0.1 s/发；过冲/回弹明显就回调 KP=70 或上限 3000）。
+
 ## 项目已实现功能
 
 ### 1. 硬件驱动
@@ -52,7 +110,7 @@
 - CH8 每次突变使 Yaw 目标角度增加 30°。
 - CH9 每次突变使 Yaw 目标角度减少 30°。
 - 通道编号、突变阈值和单次角度增量均可在 `config.h` 中修改。
-- VOFA 实时显示 Pitch/Yaw 目标角与实际角、M2006 目标/实际发弹数、两颗 M3508 转速。
+- VOFA 实时显示 Pitch/Yaw 目标角与实际角、M2006 拨盘目标/实际输出角度、两颗 M3508 转速。
 - 支持 UART4 在线修改 Pitch/Yaw 位置环、速度环 KP/KI/KD 和 Pitch 重力前馈幅值。
 
 ### 5. 安全保护
@@ -262,7 +320,7 @@ M2006 只有在线时才会运行。Launch 任务还会独立检查 100 ms 遥�
 ## 九、VOFA JustFloat 与在线调参
 
 UART4 每 10 ms 发送 9 个小端 float，随后发送帧尾 `00 00 80 7F`：Pitch/Yaw 目标角
-与实际角、M2006 目标/实际发弹数、两颗 M3508 转速、调参解析计数。完整通道映射、
+与实际角、M2006 拨盘目标/实际输出角度、两颗 M3508 转速、调参解析计数。完整通道映射、
 命令清单和调试/操作宏见 [Tasks/README.md](Tasks/README.md)。
 
 UART4 同时接收以回车或换行结尾的 ASCII 命令：

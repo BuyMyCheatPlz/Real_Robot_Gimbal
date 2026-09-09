@@ -155,7 +155,7 @@ void Launch_Task(void *argument)
             }
 
             /* 模式切换：目标同步到当前位置。S1 语义：
-             * 1=保持(角度环)  2=连发(纯速度环 4800rpm=20Hz，实测稳定)
+             * 1=保持(角度环)  2=连发(角度环PLL锁 20Hz)
              * 3=单动(角度环)：每次从 1 拨到 3 触发一步 +40°(输出)。 */
             if (sw != m2006_prev_switch)
             {
@@ -173,23 +173,46 @@ void Launch_Task(void *argument)
 
             if (sw == 2U)
             {
-                /* S1=2 连发：纯速度环 4800rpm(20Hz)，实测稳定。
-                 * 目标发弹数按名义射速累加(20发/s)，与实际发弹数对比可看是否跟上。 */
+                /* S1=2 连发：角度环作为锁相环(PLL)。
+                 * 目标相位按 40°/50ms(=800°/s 输出 = 4800rpm 电机)连续推进；
+                 * 速度指令 = 基准 4800rpm + 相位误差(输出°)×CONT_PLL_KP，
+                 * 让拨盘相位锁定到 20Hz，负载扰动时自动补速/减速。
+                 * 内环 KI=0，靠相位误差 P 修正，防积分滞后/过冲。 */
                 uint32_t now;
                 float dt_s;
+                float phase_err;
+                float speed_rpm;
                 MotorSpeedPid_SetGains(&can2_m2006_id5.speed_pid,
                                        LAUNCH_M2006_ID5_SPEED_KP,
-                                       LAUNCH_M2006_ID5_SPEED_KI, 0.0f);
+                                       0.0f, 0.0f);
                 now = HAL_GetTick();
                 dt_s = (float)(now - m2006_last_step_ms) * 0.001f;
                 m2006_last_step_ms = now;
-                if ((dt_s >= 0.0f) && (dt_s < 0.5f))
-                    m2006_target_rounds +=
-                        (LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM / 240.0f) * dt_s;
-                m2006_target_output_deg = output_deg;  /* 目标跟随实际(仅显示) */
+                if (dt_s > 0.2f) dt_s = 0.2f;
+                if (dt_s < 0.0f) dt_s = 0.0f;
+                /* 相位参考连续推进：40°/50ms = 800°/s */
+                m2006_target_output_deg +=
+                    (LAUNCH_M2006_ID5_STEP_DEG * 1000.0f /
+                     (float)LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS) * dt_s;
+                phase_err = m2006_target_output_deg - output_deg;
+                /* 失锁重锁：堵弹/负载卡住导致相位差超 ±2 发时，把参考相位拉回实际，
+                 * 防止恢复瞬间追赶造成猛冲/撞弹。 */
+                if ((phase_err > (2.0f * LAUNCH_M2006_ID5_STEP_DEG)) ||
+                    (phase_err < (-2.0f * LAUNCH_M2006_ID5_STEP_DEG)))
+                    m2006_target_output_deg = output_deg;
+                phase_err = m2006_target_output_deg - output_deg;
+                speed_rpm = LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM +
+                            LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG *
+                            phase_err;
+                if (speed_rpm > LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT)
+                    speed_rpm = LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT;
+                else if (speed_rpm < -LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT)
+                    speed_rpm = -LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT;
                 M2006_SetSpeed(&can2_m2006_id5,
-                    LAUNCH_M2006_ID5_DIRECTION *
-                    LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM);
+                               LAUNCH_M2006_ID5_DIRECTION * speed_rpm);
+                /* 显示/统计：I4 按 40° 取整成阶梯，发弹数同步 = 已走过的 40° 数 */
+                m2006_target_rounds = (float)(int32_t)(
+                    m2006_target_output_deg / LAUNCH_M2006_ID5_STEP_DEG);
             }
             else
             {
@@ -218,7 +241,19 @@ void Launch_Task(void *argument)
                                LAUNCH_M2006_ID5_DIRECTION * target_rpm);
             }
 
-            gimbal_control_state.m2006_target_deg = m2006_target_output_deg;
+            /* 显示：连发目标按 40° 取整(阶梯)，单发/保持打印精确目标 */
+            if (sw == 2U)
+            {
+                gimbal_control_state.m2006_target_deg =
+                    (float)(int32_t)(m2006_target_output_deg /
+                                     LAUNCH_M2006_ID5_STEP_DEG) *
+                    LAUNCH_M2006_ID5_STEP_DEG;
+            }
+            else
+            {
+                gimbal_control_state.m2006_target_deg =
+                    m2006_target_output_deg;
+            }
             gimbal_control_state.m2006_actual_deg = output_deg;
             gimbal_control_state.m2006_target_rounds = m2006_target_rounds;
             gimbal_control_state.m2006_actual_rounds = m2006_actual_rounds;

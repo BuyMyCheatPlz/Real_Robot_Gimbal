@@ -50,10 +50,19 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
          * 速度环积分累积，恢复瞬间灌出猛电压导致 pitch 疯转。 */
         MotorSpeedPid_Reset(&motor->speed_pid);
         motor->speed_filter_initialized = 0U;
+        motor->output_hold = 0U;   /* 离线解除保持，防止旧输出复活 */
+        motor->last_output = 0.0f;
         return 0;
     }
-    /* 速度环反馈源：默认用编码器转速；若启用外部反馈(如 BMI 陀螺 pitch 角速度)，
-     * 则改用外部反馈——陀螺直接测云台真实角速度，不受减速/背隙/柔性影响，稳得更快。 */
+    if (motor->output_hold != 0U)
+    {
+        /* yaw 运动期间锁存 pitch：输出沿用进入保持时的值，PID/滤波状态冻结，
+         * 避免 yaw 转动漏进 Roll 通道让 pitch 速度环误动。 */
+        return motor->held_output;
+    }
+    /* 速度环反馈源：默认用编码器转速；若启用外部反馈(如 BMI 陀螺 Roll
+     * 角速度)，则目标与反馈必须使用同一单位。陀螺直接测云台真实角速度，
+     * 不受减速/背隙/柔性影响。 */
     speed_feedback_rpm = (motor->use_external_speed_feedback != 0U) ?
                          motor->external_speed_rpm :
                          (float)motor->feedback.speed_rpm;
@@ -79,5 +88,6 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
         output = (motor->target_speed_rpm > 0.0f) ?
             PITCH_STARTUP_MIN_VOLTAGE : -PITCH_STARTUP_MIN_VOLTAGE;
     }
+    motor->last_output = output;
     return (int16_t)output;
 }

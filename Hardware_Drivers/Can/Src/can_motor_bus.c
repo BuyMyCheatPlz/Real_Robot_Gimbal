@@ -263,8 +263,12 @@ static void reset_pitch_control(void)
     MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
     can1_gm6020_id2.filtered_speed_rpm =
         (float)can1_gm6020_id2.feedback.speed_rpm;
+    /* 下次授权会切换到 BMI088 Roll 速度反馈；强制首帧重新初始化，
+     * 避免将旧的编码器 rpm 与新的 °/s 混合。 */
+    can1_gm6020_id2.speed_filter_initialized = 0U;
     can1_gm6020_id2.use_external_speed_feedback = 0U;  /* 复位后回落到编码器反馈 */
     can1_gm6020_id2.external_speed_rpm = 0.0f;
+    can1_gm6020_id2.output_hold = 0U;                  /* 复位解除 yaw 运动期锁存 */
 }
 
 static void reset_yaw_control(void)

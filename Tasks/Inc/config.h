@@ -34,6 +34,8 @@
 #define REMOTE_CH_YAW_INDEX               0U  /* 遥控器 CH1 */
 #define REMOTE_CH_S1_INDEX                4U  /* D-BUS S1：M2006 */
 #define REMOTE_CH_S2_INDEX                5U  /* D-BUS S2：M3508 */
+/* 遥控 Pitch 步进与实际 Pitch 正方向的关系。 */
+#define PITCH_STICK_DIR                  (-1.0f)
 
 /* ---------------- BMI088 安装方向与姿态滤波 ----------------
  * 轴编号对应数组下标：X=0、Y=1、Z=2。调试重力前馈前，必须根据 BMI088
@@ -59,9 +61,20 @@
 
 /* ---------------- 云台反馈低通滤波 ---------------- */
 #define PITCH_ENCODER_LPF_ALPHA           0.15f
-#define PITCH_SPEED_LPF_ALPHA             0.20f
+/* Pitch 速度环反馈(Roll 陀螺 °/s)一阶低通，alpha 越小越平滑。原 1.0 是模板
+ * “陀螺直采不滤波”(避免给 D/外环加相位滞后)。0.80 是折中：保留轻度抑制高频
+ * 毛刺，同时把相位滞后降到很小（越高 KP 越稳定）；若想把 KP 推得更高可回调
+ * 1.0，若仍有高频毛刺可降 0.6~0.7。重力前馈 Roll 由 PITCH_GRAVITY_ROLL_LPF_ALPHA
+ * 独立滤波。 */
+#define PITCH_SPEED_LPF_ALPHA             0.80f
 /* 重力前馈单独滤波 Roll：只抑制前馈高频扰动，不给 Pitch 位置/速度环增加滞后。 */
 #define PITCH_GRAVITY_ROLL_LPF_ALPHA      0.05f
+/* 安装非正交造成的 Yaw→Roll 陀螺串扰补偿；0 表示关闭，现场标定后再修改。 */
+#define PITCH_ROLL_YAW_CROSS_RATE          0.0f
+/* 本机 Pitch 物理转动对应 BMI088 Roll 轴；速度环使用该轴的真实角速度。
+ * Roll 和 GM6020 编码器方向相反，速度反馈必须转换到电机坐标，不能直接用
+ * Roll 的正方向。若重新测得安装方向不同，只修改此处。 */
+#define PITCH_ROLL_RATE_TO_SPEED_SIGN      (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN)
 #define YAW_ENCODER_LPF_ALPHA             0.40f   /* 位置反馈滞后↓(30°快移用) */
 #define YAW_SPEED_LPF_ALPHA               0.50f   /* 速度反馈滞后↓(30°快移用) */
 /* IMU Yaw 是当前的位置环测量值。进入位置 PID 前先滤波；电机编码器仍作为
@@ -97,24 +110,39 @@
 #define PITCH_GRAVITY_ONLY_ENABLE         0U
 /* 新云台首次回零采用保守的外环：上电实测约 37° 偏差时，旧 800/90 组合
  * 会立即以最大速度贯穿整个行程。确认方向和阻尼后再逐步增加。 */
-#define PITCH_ANGLE_KP_RPM_PER_RAD         75.0f
-#define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
-/* 回零阶段的位置反馈来自 BMI088。1 ms 周期直接对该角度求导会把传感器噪声
- * 放大到速度限幅，导致目标速度在 ±90 rpm 间翻转；Pitch 外环不使用 D 项。 */
-#define PITCH_ANGLE_KD_RPM_S_PER_RAD       2.5f
+/* 宏名为历史遗留；Pitch 双环内部同模板使用位置 °、速度 °/s。 */
+#define PITCH_ANGLE_KP_RPM_PER_RAD         11.5f
+#define PITCH_ANGLE_KI_RPM_PER_RAD_S        5.0f
+/* Pitch 位置环 D（外环阻尼），与位置 PID 一起使用。已统一为模板“每拍误差差量”
+ * 语义：D = Kd*(e[k]-e[k-1])，等效速度阻尼系数 = Kd×0.001。
+ * 300 ≈ 0.3 速度阻尼（模板 yaw 的 296.92 就是这一量级），用于把位置环 KP 推高后
+ * 仍保持外环稳定；若阶跃偏软可降到 100~200，若还抖可加。
+ * 不要回到旧的“每秒导数”语义（同数值放大 ~1000 倍 → 抖动）。 */
+#define PITCH_ANGLE_KD_RPM_S_PER_RAD       2280.0f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
 #define PITCH_MAX_SPEED_RPM                90.0f
-#define PITCH_SPEED_KP                     70.0f
-#define PITCH_SPEED_KI                      4.0f
-#define PITCH_SPEED_KD                    0.0f
+#define PITCH_SPEED_KP                    154.44f
+#define PITCH_SPEED_KI                     29.3f
+/* 模板 pitch 速度环整定值 Kd=60.85：其 D 是“每 1 ms 拍的误差差量”
+ * kd*(e[k]-e[k-1])（不除以 dt），MotorSpeedPid 已按同一语义实现，
+ * 直接使用该数值即复现模板阻尼。切勿把它当“每秒导数/除以 dt”的增益：
+ * dt=1 ms 时同数值会被放大约 1000 倍，一加 D 就满幅抖振。 */
+#define PITCH_SPEED_KD                     0.85f
 #define PITCH_SPEED_INTEGRAL_LIMIT         12000.0f
 #define PITCH_SPEED_OUTPUT_LIMIT           25000.0f
-#define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 70.0f
-/* 起步助推仅用于克服静摩擦。旧值 1 rpm/8000 会把 IMU 噪声造成的微小反向
- * 速度请求放大为满幅翻转；只在明显运动请求时以受限幅值介入。 */
+/* 速度环积分分离(误差超过该值停止积分)。模板 dz=5(误差>5 时积分清零，近似 PD)；
+ * 原 70 几乎等于全带积分，低频相位滞后大、外环 KP 一高就易起振。先收到 5，
+ * 若积分抗静摩擦不足可再放回 10~20。 */
+#define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 5.0f
+/* 起步助推“开关式”最小力矩：|速度指令|≥阈值 且 |PID输出|<下限时强制顶到 ±MIN，
+ * 等于一个与 PID 增益无关的 bang-bang 继电器。模板工程没有该机制；
+ * 实测它在目标附近保持时把 ±0.2~1° 误差变为 ±4~22°/s 指令（>1 阈值）后，
+ * 输出被强制成 ±8000 满力矩来回打 → 形成 ~3.3~3.6 Hz、参数调不掉的非线性极限环
+ * （pitch.csv）。故置 0 关闭（等同模板行为）。若阶跃起步出现静摩擦停顿，
+ * 再开但把阈值提到 10~15°/s、下限降到 2000~4000 减小冲击。 */
 #define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
-#define PITCH_STARTUP_MIN_VOLTAGE         8000.0f
-#define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
+#define PITCH_STARTUP_MIN_VOLTAGE           0.0f
+#define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (0.0f * TASK_DEG_TO_RAD)
 /* 目标死区：位置误差小于该角(°)时位置环输出 0，靠重力前馈+速度环把轴稳住，
  * 防止齿距(背隙)在目标附近引起高频抖动。设 0 关闭死区；抖得凶就调大，但过大
  * 会降低到位精度(一般略大于背隙即可)。 */
@@ -130,7 +158,7 @@
 #define PITCH_HOME_STABLE_TIME_MS          200U    /* 回零到位：水平死区内稳定此时长判定到达 */
 /* 按模板工程的有符号正弦前馈，直接使用 Roll。驱动层将前馈加到
  * 速度环输出，因此调用处会取负，实现模板中的“速度环输出 - 前馈”。 */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         13000.0f
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         13519.0f
 #define PITCH_GRAVITY_ZERO_RAD             0.0f       /* Roll=0°：前馈过零 */
 #define PITCH_GRAVITY_SIGN                -1.0f
 #define PITCH_MOTOR_SIGN                  1.0f
@@ -138,6 +166,13 @@
  * I11=-64° 为最低、-139° 为最高，因此该符号必须为 -1。 */
 #define PITCH_ENCODER_TO_IMU_SIGN        (-1.0f)
 #define PITCH_SOFT_LIMIT_DEG              90.0f
+/* 收到 Yaw 遥控步进后短暂锁存 Pitch，防止 Yaw→Roll 串扰进入 Pitch 速度环。 */
+#define PITCH_LATCH_AFTER_YAW_CMD_MS       500U
+#define PITCH_LATCH_YAW_SETTLED_DEG        0.5f
+/* Pitch 有限加速度轨迹：以平滑的轨迹目标取代 30° 阶跃直接进入位置环。 */
+#define PITCH_TRAJECTORY_MAX_SPEED_RAD_S   6.0f
+#define PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2 70.0f
+#define PITCH_TRAJ_VEL_FF_GAIN             1.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
  * 30° 阶跃(≤200ms、超调≤0.2°)整定组。依据辨识：电流→速度≈积分器(自由轴)，
@@ -151,7 +186,10 @@
  *  末端小抖/噪声   → 略降 YAW_SPEED_KP 或回调滤波 alpha。 */
 #define YAW_ANGLE_KP_RAD_S_PER_RAD        2.00f
 #define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.02f
-#define YAW_ANGLE_KD_RAD_S2_PER_RAD       0.10f
+/* 位置环 D 已统一为模板“每拍误差差量”语义 kd*(e[k]-e[k-1])（不除以 dt）。
+ * 原 0.10 是按“每秒导数”写的等效值（≈速度阻尼 0.1），换算为每拍语义：
+ * 0.10 / 0.001 = 100，行为不变。模板 yaw 的 296.92 同属此量级。 */
+#define YAW_ANGLE_KD_RAD_S2_PER_RAD       100.0f
 #define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    0.04f
 #define YAW_MAX_SPEED_RAD_S               7.0f
 /* Yaw 目标轨迹，轨迹单位为输出轴弧度。 */
@@ -228,6 +266,7 @@
 /* 连发档名义转速 4800rpm(20Hz 步进)；实际由角度环追目标决定，上限
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
+#define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 60.0f
 #define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 40.0f  /* 输出°→电机rpm：10°误差→400rpm */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   1000.0f /* 单动接近速度：250 太慢(约1s/发)，提到 1000(约0.3s/发) */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5000.0f /* 连发档限速：需追 4800rpm 目标 */

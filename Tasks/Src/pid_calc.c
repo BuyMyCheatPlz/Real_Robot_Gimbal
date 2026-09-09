@@ -16,6 +16,9 @@ extern osMessageQueueId_t Update_PID_paraHandle;
 #define TWO_PI_F                          6.2831853071795864769f
 #define RAD_S_TO_RPM                      (60.0f / TWO_PI_F)
 #define RPM_TO_RAD_S                      (TWO_PI_F / 60.0f)
+#define RAD_TO_DEG                        (1.0f / TASK_DEG_TO_RAD)
+#define PITCH_CONTROL_TO_MOTOR_SIGN       \
+    (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN)
 #define PITCH_SOFT_LIMIT_RAD              (PITCH_SOFT_LIMIT_DEG * TASK_DEG_TO_RAD)
 #define YAW_SOFT_LIMIT_RAD                (YAW_SOFT_LIMIT_DEG * TASK_DEG_TO_RAD)
 
@@ -28,7 +31,9 @@ typedef struct
     float integral_limit;
     float integral_separation_error;
     float output_limit;
-    float previous_measurement;
+    /* D 项上一拍误差 e[k-1]。D = kd*(e[k]-e[k-1])（每 1 ms 一拍，不除以 dt），
+     * 与模板 pid.c 语义一致，避免把 1 kHz 编码器差分放大 1/dt≈1000 倍。 */
+    float previous_error;
     uint8_t initialized;
 } PositionPid_t;
 
@@ -157,11 +162,15 @@ static float position_pid(PositionPid_t *pid, float target, float measurement,
     float proportional_derivative;
     float candidate_integral;
     uint8_t integrate;
+    /* D 项 = kd*(e[k]-e[k-1])，与模板 pid.c 一致（每拍误差差量，不除以 dt）。
+     * 模板 pitch 位置环不用 D（=0），阻尼在速度环；若确实要位置阻尼，
+     * 增益按“每拍差量”标定（模板 yaw 用 296.92 属此量级），
+     * 不要用 -(meas-prev)/dt 的每秒导数语义，否则同数值放大 ~1000 倍。 */
     if (pid->initialized != 0U)
-        derivative = -(measurement - pid->previous_measurement) / dt;
+        derivative = error - pid->previous_error;
     else
         pid->initialized = 1U;
-    pid->previous_measurement = measurement;
+    pid->previous_error = error;
     proportional_derivative = error * pid->kp + derivative * pid->kd;
     integrate = (uint8_t)((pid->integral_separation_error <= 0.0f) ||
                           ((error <= pid->integral_separation_error) &&
@@ -185,7 +194,7 @@ static void reset_position_pid(PositionPid_t *pid)
 {
     if (pid == 0) return;
     pid->integral = 0.0f;
-    pid->previous_measurement = 0.0f;
+    pid->previous_error = 0.0f;
     pid->initialized = 0U;
 }
 
@@ -255,7 +264,8 @@ void PID_calc(void *argument)
     PositionPid_t pitch_angle_pid = {
         PITCH_ANGLE_KP_RPM_PER_RAD, PITCH_ANGLE_KI_RPM_PER_RAD_S,
         PITCH_ANGLE_KD_RPM_S_PER_RAD, 0.0f, PITCH_ANGLE_INTEGRAL_LIMIT_RPM,
-        PITCH_ANGLE_INTEGRAL_SEPARATION_RAD, PITCH_MAX_SPEED_RPM, 0.0f, 0U
+        PITCH_ANGLE_INTEGRAL_SEPARATION_RAD * RAD_TO_DEG,
+        PITCH_MAX_SPEED_RPM, 0.0f, 0U
     };
     PositionPid_t yaw_angle_pid = {
         YAW_ANGLE_KP_RAD_S_PER_RAD, YAW_ANGLE_KI_RAD_S_PER_RAD_S,
@@ -291,13 +301,16 @@ void PID_calc(void *argument)
     float yaw_profile_speed = 0.0f;
     float yaw_profile_acceleration = 0.0f;
     float pitch_home = 0.0f;
+    /* Pitch 阶跃轨迹状态(仿 yaw)：位置环跟踪有限加速度轨迹实现 30°/≤200ms/≤0.2° */
+    float pitch_profile_target = 0.0f;
+    float pitch_profile_speed = 0.0f;
+    float pitch_profile_acceleration = 0.0f;
     float pitch_gravity_ff_voltage = PITCH_GRAVITY_FF_MAX_VOLTAGE;
     float yaw_home = 0.0f;
     float imu_roll = 0.0f;
     float pitch_gravity_roll_filtered = 0.0f;
-    float imu_pitch = 0.0f;
     float imu_yaw = 0.0f;
-    float bmi_pitch_rate_rad_s = 0.0f;  /* 仅用于 VOFA 诊断，不参与 Pitch 速度环 */
+    float bmi_roll_rate_rad_s = 0.0f;
     float yaw_imu_filtered = 0.0f;
     float pending_pitch_delta = 0.0f;
     float pending_yaw_delta = 0.0f;
@@ -317,6 +330,9 @@ void PID_calc(void *argument)
     uint8_t pitch_gravity_roll_filter_initialized = 0U;
     uint8_t yaw_imu_filter_initialized = 0U;
     uint8_t overrun_pending = 0U;
+    uint8_t pitch_hold_active = 0U;        /* yaw 运动期间锁存 pitch（两轴不同时指令） */
+    float pitch_held_gravity_ff = 0.0f;    /* 保持期间用于遥测/恢复的前馈值 */
+    uint32_t pitch_hold_until_ms = 0U;     /* 收到 yaw 指令后的锁存到期时刻(0=无锁存请求) */
     (void)argument;
     memset((void *)&gimbal_control_state, 0, sizeof(gimbal_control_state));
     MotorSpeedPid_Init(&can1_gm6020_id2.speed_pid, PITCH_SPEED_KP,
@@ -427,9 +443,8 @@ void PID_calc(void *argument)
                         yaw_angle_difference(imu_roll,
                                              pitch_gravity_roll_filtered);
                 }
-                imu_pitch = message.pitch_rad;
                 imu_yaw = message.yaw_rad;
-                bmi_pitch_rate_rad_s = message.pitch_rate_rad_s;
+                bmi_roll_rate_rad_s = message.roll_rate_rad_s;
                 if (yaw_imu_filter_initialized == 0U)
                 {
                     yaw_imu_filtered = imu_yaw;
@@ -466,7 +481,11 @@ void PID_calc(void *argument)
             if ((message.flags & GIMBAL_MSG_YAW_DELTA) != 0U)
             {
                 if (yaw_target_initialized != 0U)
+                {
                     yaw_target += message.yaw_delta_rad;
+                    /* 收到 yaw 遥控指令 → 触发 pitch 锁存窗口（yaw/pitch 不同时指令） */
+                    pitch_hold_until_ms = now_ms + PITCH_LATCH_AFTER_YAW_CMD_MS;
+                }
                 else
                     pending_yaw_delta += message.yaw_delta_rad;
             }
@@ -481,7 +500,7 @@ void PID_calc(void *argument)
             {
                 pitch_previous_count = count;
                 pitch_total_count = (int32_t)count;
-                pitch_encoder_filtered = PITCH_MOTOR_SIGN * (float)count *
+                pitch_encoder_filtered = PITCH_ENCODER_TO_IMU_SIGN * (float)count *
                                          TWO_PI_F / (float)DJI_ENCODER_COUNTS;
                 pitch_encoder_initialized = 1U;
             }
@@ -493,7 +512,7 @@ void PID_calc(void *argument)
                 pitch_total_count += delta;
                 pitch_previous_count = count;
                 pitch_encoder_filtered += PITCH_ENCODER_LPF_ALPHA *
-                    (PITCH_MOTOR_SIGN * (float)pitch_total_count * TWO_PI_F /
+                    (PITCH_ENCODER_TO_IMU_SIGN * (float)pitch_total_count * TWO_PI_F /
                      (float)DJI_ENCODER_COUNTS - pitch_encoder_filtered);
             }
         }
@@ -587,6 +606,11 @@ void PID_calc(void *argument)
                 pitch_encoder_initialized = 0U;
                 reset_position_pid(&pitch_angle_pid);
                 MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+                can1_gm6020_id2.output_hold = 0U;   /* 失去控制权即解除锁存 */
+                pitch_hold_active = 0U;
+                pitch_hold_until_ms = 0U;
+                pitch_profile_speed = 0.0f;
+                pitch_profile_acceleration = 0.0f;
             }
             if (yaw_control_permitted == 0U)
             {
@@ -604,13 +628,18 @@ void PID_calc(void *argument)
                 (pitch_target_initialized == 0U) &&
                 (pitch_encoder_initialized != 0U))
             {
-                /* 恢复 cb202a2 的 Pitch 零偏和目标逻辑：位置环只使用编码器。
-                 * Roll 姿态用于重力前馈，不参与位置回零。 */
-                pitch_encoder_offset = pitch_encoder_filtered - imu_pitch;
-                pitch_angle_actual = imu_pitch;
+                /* 本机物理 Pitch 对应 BMI088 Roll。上电回正用 Roll=0 建立
+                 * 编码器零偏；后续位置环仍只使用连续的电机编码器，避免姿态
+                 * 解算跳变直接进入位置闭环。 */
+                pitch_encoder_offset = pitch_encoder_filtered - imu_roll;
+                pitch_angle_actual = imu_roll;
                 pitch_home = 0.0f;
                 pitch_target = pitch_home + pending_pitch_delta;
                 pending_pitch_delta = 0.0f;
+                /* 轨迹从当前位置起步，避免初始大误差造成的阶跃冲击 */
+                pitch_profile_target = pitch_angle_actual;
+                pitch_profile_speed = 0.0f;
+                pitch_profile_acceleration = 0.0f;
                 pitch_target_initialized = 1U;
             }
             else if (pitch_target_initialized != 0U)
@@ -652,7 +681,9 @@ void PID_calc(void *argument)
                 if (yaw_target < yaw_home - YAW_SOFT_LIMIT_RAD)
                     yaw_target = yaw_home - YAW_SOFT_LIMIT_RAD;
             }
-            if (pitch_target_initialized != 0U)
+            /* 软限位仅在 DEG>0 时生效；DEG=0 表示不限，避免把目标夹死在 home±0 */
+            if ((pitch_target_initialized != 0U) &&
+                (PITCH_SOFT_LIMIT_DEG > 0.0f))
             {
                 if (pitch_target > pitch_home + PITCH_SOFT_LIMIT_RAD)
                     pitch_target = pitch_home + PITCH_SOFT_LIMIT_RAD;
@@ -792,28 +823,97 @@ void PID_calc(void *argument)
                 }
                 if (pitch_target_initialized != 0U)
                 {
-                    if (PITCH_GRAVITY_ONLY_ENABLE != 0U)
+                    /* 锁存触发：只响应“收到过 yaw 遥控指令”（pitch_hold_until_ms≠0）。
+                     * 不再用“yaw 是否在动”推断——轨迹容差/转速噪声会误判成一直在动，
+                     * 导致正常打 pitch 被锁死。解锁：yaw 基本到位或超时兜底。 */
+                    uint8_t yaw_settled = 0U;
+                    float yaw_meas_speed_rad_s =
+                        YAW_ENCODER_SIGN *
+                        can2_dm4310_id1.filtered_speed_rpm * RPM_TO_RAD_S;
+                    if ((yaw_target_initialized != 0U) &&
+                        (fabsf(yaw_target - yaw_profile_target) <=
+                         (PITCH_LATCH_YAW_SETTLED_DEG * TASK_DEG_TO_RAD)) &&
+                        (fabsf(yaw_profile_speed) <=
+                         YAW_PROFILE_SETTLED_SPEED_RAD_S) &&
+                        (fabsf(yaw_meas_speed_rad_s) <= 0.10f))
+                        yaw_settled = 1U;
+                    if ((pitch_hold_until_ms != 0U) &&
+                        ((yaw_settled != 0U) ||
+                         ((int32_t)(now_ms - pitch_hold_until_ms) >= 0)))
+                        pitch_hold_until_ms = 0U;   /* 到位或超时 → 允许解锁 */
+
+                    if (pitch_hold_until_ms != 0U)
                     {
-                        reset_position_pid(&pitch_angle_pid);
-                        MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
-                        pitch_speed_target_rpm = 0.0f;
+                        /* yaw/pitch 不会同时被遥控指令。yaw 转动会漏进 Roll(物理
+                         * pitch)通道，使 pitch 速度环误动；指令运动期间锁存 pitch：
+                         * 沿用进入时的电机输出，PID/滤波状态冻结，到位后解锁。 */
+                        if (pitch_hold_active == 0U)
+                        {
+                            pitch_hold_active = 1U;
+                            can1_gm6020_id2.output_hold = 1U;
+                            can1_gm6020_id2.held_output =
+                                (int16_t)can1_gm6020_id2.last_output;
+                            pitch_held_gravity_ff =
+                                gimbal_control_state.gravity_feedforward;
+                        }
+                        gravity_feedforward = pitch_held_gravity_ff;
                     }
                     else
                     {
-                        pitch_speed_target_rpm = position_pid(
-                            &pitch_angle_pid, pitch_target, pitch_angle_actual,
-                            control_dt_s);
+                        if (pitch_hold_active != 0U)
+                        {
+                            pitch_hold_active = 0U;
+                            can1_gm6020_id2.output_hold = 0U;
+                            /* 解锁：重置速度环，避免保持期与恢复期的速度/滤波
+                             * 状态衔接时出现积分或微分跳变。 */
+                            MotorSpeedPid_Reset(
+                                &can1_gm6020_id2.speed_pid);
+                            can1_gm6020_id2.speed_filter_initialized = 0U;
+                        }
+                        if (PITCH_GRAVITY_ONLY_ENABLE != 0U)
+                        {
+                            reset_position_pid(&pitch_angle_pid);
+                            MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+                            pitch_speed_target_rpm = 0.0f;
+                        }
+                        else
+                        {
+                            /* 有限加速度轨迹 + 速度前馈(仿 yaw)：位置环跟踪轨迹而非
+                             * 直接阶跃，保证 30° 阶跃 ≤200ms 且超调 ≤0.2°。 */
+                            yaw_trajectory_step(&pitch_profile_target,
+                                                &pitch_profile_speed,
+                                                &pitch_profile_acceleration,
+                                                pitch_target,
+                                                PITCH_TRAJECTORY_MAX_SPEED_RAD_S,
+                                                PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2,
+                                                control_dt_s);
+                            pitch_speed_target_rpm =
+                                position_pid(&pitch_angle_pid,
+                                             pitch_profile_target * RAD_TO_DEG,
+                                             pitch_angle_actual * RAD_TO_DEG,
+                                             control_dt_s) +
+                                PITCH_TRAJ_VEL_FF_GAIN *
+                                pitch_profile_speed * RAD_TO_DEG;
+                            pitch_speed_target_rpm = clampf(
+                                pitch_speed_target_rpm, PITCH_MAX_SPEED_RPM);
+                        }
+                        /* 模板的合成是 PID - ff；本驱动固定做 PID + 前馈，
+                         * 故这里传入 -ff。Roll=0° 是前馈参考零点。 */
+                        gravity_feedforward = pitch_gravity_ff_voltage *
+                            pitch_gravity_feedforward_scale(
+                                pitch_gravity_roll_filtered);
+                        GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
+                            -PITCH_MOTOR_SIGN * gravity_feedforward);
+                        GM6020_SetSpeed(&can1_gm6020_id2,
+                                       PITCH_CONTROL_TO_MOTOR_SIGN *
+                                       pitch_speed_target_rpm);
+                        /* 模板使用物理轴的 IMU 角速度闭环。本机 Pitch 对应 Roll，
+                         * 因而位置仍由编码器给出、速度由 Roll 陀螺给出。 */
+                        can1_gm6020_id2.external_speed_rpm =
+                            PITCH_ROLL_RATE_TO_SPEED_SIGN *
+                            bmi_roll_rate_rad_s * RAD_TO_DEG;
+                        can1_gm6020_id2.use_external_speed_feedback = 1U;
                     }
-                    /* 模板的合成是 PID - ff；本驱动固定做 PID + 前馈，
-                     * 故这里传入 -ff。Roll=0° 是前馈参考零点。 */
-                    gravity_feedforward = pitch_gravity_ff_voltage *
-                        pitch_gravity_feedforward_scale(
-                            pitch_gravity_roll_filtered);
-                    GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
-                        -PITCH_MOTOR_SIGN * gravity_feedforward);
-                    GM6020_SetSpeed(&can1_gm6020_id2,
-                                   PITCH_MOTOR_SIGN * pitch_speed_target_rpm);
-                    can1_gm6020_id2.use_external_speed_feedback = 0U;
                 }
                 motor_status = CanMotorBus_UpdateSelected(
                     control_dt_s, pitch_target_initialized,
@@ -831,6 +931,11 @@ void PID_calc(void *argument)
                     pitch_encoder_initialized = 0U;
                     yaw_encoder_initialized = 0U;
                     YawStartup_Reset(&yaw_startup_state);
+                    can1_gm6020_id2.output_hold = 0U;   /* 故障下退出锁存 */
+                    pitch_hold_active = 0U;
+                    pitch_hold_until_ms = 0U;
+                    pitch_profile_speed = 0.0f;
+                    pitch_profile_acceleration = 0.0f;
                     gimbal_control_state.active = 0U;
                     gimbal_control_state.gravity_feedforward = 0.0f;
                 }
@@ -962,7 +1067,8 @@ void PID_calc(void *argument)
         gimbal_control_state.pitch_motor_speed_rpm =
             (float)can1_gm6020_id2.feedback.speed_rpm;
         gimbal_control_state.pitch_imu_speed_rpm =
-            -bmi_pitch_rate_rad_s * RAD_S_TO_RPM / PITCH_MOTOR_SIGN;
+            PITCH_ROLL_RATE_TO_SPEED_SIGN *
+            bmi_roll_rate_rad_s * RAD_TO_DEG;
         gimbal_control_state.yaw_speed_rad_s =
             (can2_dm4310_id1.online != 0U) ?
             YAW_ENCODER_SIGN * can2_dm4310_id1.filtered_speed_rpm *

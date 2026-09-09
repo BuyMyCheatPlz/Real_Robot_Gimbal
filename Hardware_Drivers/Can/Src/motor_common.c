@@ -18,7 +18,7 @@ void MotorSpeedPid_Init(MotorSpeedPid_t *pid, float kp, float ki,
     pid->integral_limit = integral_limit;
     pid->integral_separation_error = 0.0f;
     pid->output_limit = output_limit;
-    pid->previous_measurement = 0.0f;
+    pid->previous_error = 0.0f;
     pid->initialized = 0U;
 }
 
@@ -27,6 +27,7 @@ void MotorSpeedPid_Reset(MotorSpeedPid_t *pid)
     if (pid != 0)
     {
         pid->integral = 0.0f;
+        pid->previous_error = 0.0f;
         pid->initialized = 0U;
     }
 }
@@ -60,11 +61,14 @@ float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
     if ((pid == 0) || (dt_s <= 0.0f)) return 0.0f;
 
     error = target_rpm - measured_rpm;
+    /* D 项与模板 pid.c 一致：kd*(e[k]-e[k-1])，每控制周期取一次差量，不除以 dt。
+     * 切勿改写成 -(meas-prev)/dt 的“每秒导数”：dt=1 ms 时同一 kd 数值会被放大
+     * 1/dt≈1000 倍（模板 60.85 → 直接顶到 ±25000 满幅 → 剧烈抖振）。 */
     if (pid->initialized != 0U)
-        derivative = -(measured_rpm - pid->previous_measurement) / dt_s;
+        derivative = error - pid->previous_error;
     else
         pid->initialized = 1U;
-    pid->previous_measurement = measured_rpm;
+    pid->previous_error = error;
     proportional_derivative = error * pid->kp + derivative * pid->kd;
     integrate = (uint8_t)((pid->integral_separation_error <= 0.0f) ||
                           (error <= pid->integral_separation_error &&

@@ -21,6 +21,10 @@ extern osSemaphoreId_t wake_launch_motorHandle;
 #define PI_F                         3.14159265358979323846f
 #define TWO_PI_F                     (2.0f * PI_F)
 
+/* yaw(芯片Y)转动在 roll(芯片Z)通道上的串扰解耦系数。
+ * 在线命令 PITCH_YAW_CROSS=±值 可现场标定（见 config.h 注释）。 */
+static volatile float pitch_roll_yaw_cross_rate = PITCH_ROLL_YAW_CROSS_RATE;
+
 typedef struct
 {
     float roll;
@@ -71,6 +75,22 @@ static void queue_latest(const TargetAngleMessage_t *message)
     }
 }
 
+static uint8_t parse_pitch_yaw_cross_command(const char *command, float *rate)
+{
+    const char prefix[] = "PITCH_YAW_CROSS=";
+    char *end;
+    float value;
+    if ((command == 0) || (rate == 0) ||
+        (strncmp(command, prefix, sizeof(prefix) - 1U) != 0))
+        return 0U;
+    value = strtof(command + sizeof(prefix) - 1U, &end);
+    if ((end == command + sizeof(prefix) - 1U) || (*end != '\0') ||
+        (isfinite(value) == 0) || (value < -0.5f) || (value > 0.5f))
+        return 0U;
+    *rate = value;
+    return 1U;
+}
+
 static uint8_t parse_yaw_test_command(const char *command, int16_t *current)
 {
     const char prefix[] = "YAWTEST=";
@@ -108,6 +128,14 @@ static void process_vofa_commands(void)
         {
             Gimbal_YawTest_Request(yaw_test_current);
             continue;
+        }
+        {
+            float cross_rate;
+            if (parse_pitch_yaw_cross_command(command, &cross_rate) != 0U)
+            {
+                pitch_roll_yaw_cross_rate = cross_rate;
+                continue;
+            }
         }
         if (PidParameter_Parse(command, &update) == 0U)
         {
@@ -191,6 +219,9 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
          bmi088.angular_rate_rad_s[IMU_GYRO_PITCH_AXIS];
     gz = IMU_GYRO_YAW_SIGN *
          bmi088.angular_rate_rad_s[IMU_GYRO_YAW_AXIS];
+    /* yaw→roll(物理pitch)通道串扰解耦：减掉 yaw(芯片Y)漏进 roll(芯片Z)的角速度，
+     * 避免“打 yaw 时 pitch 速度环以为 pitch 在动”而自行出力。PITCH_YAW_CROSS=±x 在线标定。 */
+    gx -= pitch_roll_yaw_cross_rate * gz;
     now = bmi088.last_update_ms;
     sample_count = bmi088.sample_count;
     if (primask == 0U) __enable_irq();
@@ -223,6 +254,7 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     message->roll_rad = estimator->roll;
     message->pitch_rad = estimator->pitch;
     message->yaw_rad = estimator->yaw;
+    message->roll_rate_rad_s = gx;
     message->pitch_rate_rad_s = gy;
     message->timestamp_ms = now;
     message->flags |= GIMBAL_MSG_ATTITUDE;
@@ -271,9 +303,9 @@ void Data_Process(void *argument)
                 if (current_pitch_sign != previous_pitch_sign)
                 {
                     if (current_pitch_sign > 0)
-                        message.pitch_delta_rad += COMMAND_STEP_RAD;
+                        message.pitch_delta_rad += PITCH_STICK_DIR * COMMAND_STEP_RAD;
                     else if (current_pitch_sign < 0)
-                        message.pitch_delta_rad -= COMMAND_STEP_RAD;
+                        message.pitch_delta_rad -= PITCH_STICK_DIR * COMMAND_STEP_RAD;
                     if (current_pitch_sign != 0)
                         message.flags |= GIMBAL_MSG_PITCH_DELTA;
                 }

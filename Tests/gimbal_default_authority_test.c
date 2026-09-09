@@ -11,9 +11,9 @@ int main(void)
 {
     GM6020_t pitch;
     DM4310_t yaw;
-    float pitch_error_rad = 10.0f * TASK_DEG_TO_RAD;
+    float pitch_error_deg = 10.0f;
     float pitch_speed_target = PITCH_ANGLE_KP_RPM_PER_RAD *
-                               pitch_error_rad;
+                               pitch_error_deg;
     int expected_pitch_command;
     int16_t pitch_command;
     int16_t yaw_command;
@@ -45,9 +45,14 @@ int main(void)
     /* Float evaluation order differs slightly between host compilers and the
      * target FPU; conversion to int16 may differ by one LSB. */
     assert(abs((int)pitch_command - expected_pitch_command) <= 1);
-    assert(PITCH_GRAVITY_FF_MAX_VOLTAGE == 13000.0f);
+    assert(PITCH_GRAVITY_FF_MAX_VOLTAGE == 13519.0f);
     assert((PITCH_GRAVITY_ROLL_LPF_ALPHA > 0.0f) &&
            (PITCH_GRAVITY_ROLL_LPF_ALPHA <= 1.0f));
+    assert(PITCH_SPEED_LPF_ALPHA == 1.0f);
+    assert((PITCH_ROLL_RATE_TO_SPEED_SIGN == 1.0f) ||
+           (PITCH_ROLL_RATE_TO_SPEED_SIGN == -1.0f));
+    assert(PITCH_ROLL_RATE_TO_SPEED_SIGN ==
+           (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN));
     assert(fabsf(PITCH_GRAVITY_ZERO_RAD) < 0.001f);
     /* Template mapping: ff=K*sin(Roll); final motor command is
      * PID-ff.  The local driver adds its feedforward term, so it receives
@@ -59,13 +64,25 @@ int main(void)
     assert(PITCH_GRAVITY_SIGN == -1.0f);
     assert(-ff_at_low_pitch_roll < 0.0f);
     assert(-ff_at_raised_pitch_roll > 0.0f);
-    assert(PITCH_ANGLE_KP_RPM_PER_RAD == 75.0f);
-    assert(PITCH_ANGLE_KD_RPM_S_PER_RAD == 2.5f);
+    assert(PITCH_ANGLE_KP_RPM_PER_RAD == 22.4f);
+    assert(PITCH_ANGLE_KI_RPM_PER_RAD_S == 0.01f);
+    assert(PITCH_ANGLE_KD_RPM_S_PER_RAD == 0.0f);
     assert(PITCH_MAX_SPEED_RPM == 90.0f);
-    assert(PITCH_SPEED_KP == 70.0f);
-    assert(PITCH_SPEED_KI == 4.0f);
+    assert(PITCH_SPEED_KP == 194.44f);
+    assert(PITCH_SPEED_KI == 24.3f);
+    assert(PITCH_SPEED_KD == 60.85f);
     assert(PITCH_STARTUP_SPEED_THRESHOLD_RPM == 1.0f);
     assert(PITCH_STARTUP_MIN_VOLTAGE == 8000.0f);
+
+    /* Pitch 内环允许用 BMI Roll 的 °/s 作为外部速度反馈；反馈滤波关闭时
+     * 首帧必须原样进入 PID，而不能残留编码器 rpm。 */
+    MotorSpeedPid_Reset(&pitch.speed_pid);
+    pitch.speed_filter_initialized = 0U;
+    pitch.use_external_speed_feedback = 1U;
+    pitch.external_speed_rpm = 42.0f;
+    GM6020_SetSpeed(&pitch, 0.0f);
+    (void)GM6020_Update(&pitch, CONTROL_PERIOD_S);
+    assert(fabsf(pitch.filtered_speed_rpm - 42.0f) < 0.001f);
 
     DM4310_Init(&yaw, 1U, YAW_SPEED_KP_CURRENT_PER_RPM,
                 YAW_SPEED_KI_CURRENT_PER_RPM_S);

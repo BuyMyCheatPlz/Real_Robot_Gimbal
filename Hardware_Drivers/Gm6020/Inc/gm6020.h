@@ -3,7 +3,8 @@
 
 #include "motor_common.h"
 
-#define GM6020_VOLTAGE_LIMIT 25000.0f
+/* 力矩/电压输出限幅：已按需求放开（原 25000 → 30000，驱动与 GM6020 指令上限）。 */
+#define GM6020_VOLTAGE_LIMIT 30000.0f
 
 typedef struct
 {
@@ -14,7 +15,15 @@ typedef struct
     float speed_filter_alpha;
     uint8_t speed_filter_initialized;
     uint8_t use_external_speed_feedback;  /* 1=速度环反馈用外部(如 BMI 陀螺)，而非编码器 */
-    float external_speed_rpm;             /* 外部速度反馈(rpm)，与编码器转速同号 */
+    /* 名称为兼容旧接口保留。外部反馈可使用任意与 target_speed_rpm 一致的
+     * 速度单位；本项目 Pitch 使用 BMI088 Roll 的 °/s。 */
+    float external_speed_rpm;
+    /* 输出保持（yaw 运动期间锁存 pitch 用）：
+     * output_hold=1 时 GM6020_Update 不再更新 PID/滤波，直接返回 held_output，
+     * 避免 yaw 转动漏进 Roll 通道导致 pitch 速度环误动。 */
+    uint8_t output_hold;
+    int16_t held_output;
+    float last_output;    /* 最近一次正常(非保持)输出，用于进入保持时锁存 */
     DjiMotorFeedback_t feedback;
     MotorSpeedPid_t speed_pid;
 } GM6020_t;

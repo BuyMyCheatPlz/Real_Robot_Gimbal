@@ -12,7 +12,9 @@ typedef struct
     float integral_limit;
     float integral_separation_error;
     float output_limit;
-    float previous_measurement;
+    /* D 项上一拍误差 e[k-1]。D = kd*(e[k]-e[k-1])（每 1 ms 一拍，不除以 dt），
+     * 与模板 pid.c 语义一致，可直接使用模板整定数值。 */
+    float previous_error;
     uint8_t initialized;
 } MotorSpeedPid_t;
 
