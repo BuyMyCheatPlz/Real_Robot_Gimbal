@@ -19,13 +19,13 @@
 
 `PID_calc` 以 1 kHz 运行：
 
-- Pitch 位置环用 GM6020 编码器展开角度作为实际值（上电/遥控重连时以 BMI Pitch
-  建立零偏）；上电回零目标 = IMU 水平(`PITCH_GRAVITY_ZERO_RAD`=-90°)。位置环输出
-  目标转速，进入 GM6020 速度 PID。
+- Pitch 位置环用 GM6020 编码器展开增量换算后的 IMU Pitch 坐标作为实际值（上电/遥控
+  重连时锚定 BMI Pitch）；上电回零目标 = IMU 水平(`PITCH_GRAVITY_ZERO_RAD`=-90°)。
+  位置环输出目标转速，进入 GM6020 速度 PID。
 - Pitch 位置环带目标死区（`PITCH_POSITION_DEADZONE_RAD`，默认 0.5°）：误差小于死区时
   位置环输出 0 并复位位置 PID，靠重力前馈+速度环稳住，防止齿距背隙在目标附近高频抖动。
 - Pitch 目标直接钳位到实测机械限位（`PITCH_LIMIT_MIN_RAD`/`PITCH_LIMIT_MAX_RAD`，
-  编码器角度 -125°~-52.37°），不靠卡限位检测。
+  IMU Pitch -139°（最高）~-64°（最低）），不靠卡限位检测。
 - Pitch 速度环反馈默认用 BMI088 陀螺 pitch 角速度（rad/s→rpm），直接测云台真实
   角速度，不受减速/背隙/柔性影响；GM6020 编码器转速作为复位/离线时的回落反馈。
 - BMI088 解算出的 Pitch（带 -90° 零偏，水平=0）用于计算正弦重力电压前馈
@@ -156,8 +156,8 @@ Pitch 重力前馈参数：`PITCH_GRAVITY_FF_MAX_VOLTAGE`（电压幅值，运�
 `PITCH_GRAVITY_FF` 命令覆盖）、`PITCH_GRAVITY_ZERO_RAD`（水平零点，默认 -90°）、
 `PITCH_GRAVITY_SIGN`（符号，方向反了会往下掉，取反即可）。
 
-Pitch 机械限位：`PITCH_LIMIT_MIN_RAD`（向下最大，编码器 -125°）、
-`PITCH_LIMIT_MAX_RAD`（向上最大，编码器 -52.37°），目标直接钳位到该区间。
+Pitch 机械限位：`PITCH_LIMIT_MIN_RAD`（最高，IMU -139°）、
+`PITCH_LIMIT_MAX_RAD`（最低，IMU -64°），目标直接钳位到该区间。
 
 ## 集中参数配置
 

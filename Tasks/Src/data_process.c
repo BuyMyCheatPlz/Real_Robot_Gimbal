@@ -6,6 +6,7 @@
 #include "vofa.h"
 #include "config.h"
 #include "pid_parameter.h"
+#include "attitude_math.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -194,12 +195,7 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     sample_count = bmi088.sample_count;
     if (primask == 0U) __enable_irq();
     if (sample_count == estimator->sample_count) return 0U;
-    /* 这颗 BMI088 转了 90°(Y 轴朝上)，pitch 是绕 X 轴转、roll 是绕 Z 轴转。
-     * 因此姿态角参考 Y 轴(垂直)：
-     *   pitch = atan2(-az, ay)：前向轴 Z 相对垂直轴的倾斜；
-     *   roll  = atan2(-ax, ay)：左右轴 X 相对垂直轴的倾斜。 */
-    roll_acc = atan2f(-ax, ay);
-    pitch_acc = atan2f(-az, ay);
+    AttitudeMath_AccelToRollPitch(ax, ay, az, &roll_acc, &pitch_acc);
 
     if (estimator->initialized == 0U)
     {
@@ -215,10 +211,11 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
         estimator->roll += gx * dt;
         estimator->pitch += gy * dt;
         estimator->yaw = normalize_yaw_rad(estimator->yaw + gz * dt);
-        estimator->roll = estimator->roll * (1.0f - ATTITUDE_ACCEL_WEIGHT) +
-                          roll_acc * ATTITUDE_ACCEL_WEIGHT;
-        estimator->pitch = estimator->pitch * (1.0f - ATTITUDE_ACCEL_WEIGHT) +
-                           pitch_acc * ATTITUDE_ACCEL_WEIGHT;
+        /* 角度不能直接做线性平均：在 +pi/-pi 相邻时会错误拉向 0。 */
+        estimator->roll += ATTITUDE_ACCEL_WEIGHT *
+            AttitudeMath_AngleDifference(roll_acc, estimator->roll);
+        estimator->pitch += ATTITUDE_ACCEL_WEIGHT *
+            AttitudeMath_AngleDifference(pitch_acc, estimator->pitch);
     }
 
     estimator->last_sample_ms = now;

@@ -7,15 +7,9 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-/* 每帧 float 数按构建模式区分：正常模式=12(前 4 路云台角 + I4 目标发弹量、
- * I5 实际发弹数、I6/I7 两个 M3508 转速、I8 已配置前馈电压、I9 实际 GM6020 命令、
- * I10 CAN 发送故障、I11 IMU 解算 pitch)；
- * 辨识模式=8(I6=电流指令、I7=yaw 原始速度)。 */
-#if (YAW_SYSID_MODE != 0U)
-#define VOFA_CHANNEL_COUNT 8U
-#else
-#define VOFA_CHANNEL_COUNT 12U
-#endif
+/* 帧格式固定为 8 路：Pitch/Yaw 目标实际角、发弹目标实际数、两颗 M3508 转速。
+ * 发送长度必须与 channels 数组共用同一个通道数宏，避免把未初始化栈数据发出。 */
+#define VOFA_CHANNEL_COUNT VOFA_CONTROL_CHANNEL_COUNT
 #define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
 #define VOFA_TX_LENGTH      (VOFA_PAYLOAD_LENGTH + 4U)
 #define VOFA_COMMAND_QUEUE_DEPTH 4U
@@ -192,35 +186,9 @@ void VOFA_print(void *argument)
         /* M2006 发弹数：目标/实际，取整(发弹量是整数)。 */
         channels[4] = (float)(int32_t)snapshot.m2006_target_rounds;
         channels[5] = (float)(int32_t)snapshot.m2006_actual_rounds;
-#if (YAW_SYSID_MODE != 0U)
-        /* yaw 辨识新增：I6=给 DM4310 的电流指令，I7=yaw 原始速度 rpm(不滤波)。
-         * 辨识模式：仅运行期间打印；运行结束/未触发时静默，记录自动停止 */
-        channels[6] = snapshot.sysid_command;
-        channels[7] = snapshot.sysid_speed_rpm;
-        if (snapshot.sysid_running == 0U)
-        {
-            ++vofa_heartbeat;
-            wake_tick += VOFA_PERIOD_MS;
-            if (osDelayUntil(wake_tick) != osOK)
-                wake_tick = osKernelGetTickCount();
-            continue;
-        }
-#else
         /* I6/I7 = 两个 M3508 摩擦轮电机实测转速(rpm) */
         channels[6] = snapshot.m3508_id2_speed_rpm;
         channels[7] = snapshot.m3508_id3_speed_rpm;
-        /* I8 = 已配置的前馈电压(pitch_gravity_ff_voltage)。发 PITCH_GRAVITY_FF=值
-         * 后此通道应变为该值；不变说明命令没解析/没送达 PID 任务。 */
-        channels[8] = snapshot.pitch_gravity_ff_setting;
-        /* I9 = 实际发给 GM6020 的命令(速度环 + 前馈后的最终电压)。前馈生效时应是
-         * 一个非零大值(随角度变)；恒为 0 说明控制未授权/前馈没发出去。 */
-        channels[9] = (float)snapshot.pitch_can_command;
-        /* I10 = CAN 发送故障：0=健康，1=故障锁存或连续失败(此时控制不授权、前馈被停) */
-        channels[10] = (float)snapshot.can_tx_fault;
-        /* I11 = IMU 解算 pitch(rad→°)。应和 I1(编码器 pitch)基本一致；若差很大说明
-         * 轴映射/姿态解算还没对，前馈自然对不上。 */
-        channels[11] = snapshot.imu_pitch_rad * 57.295779513082320876f;
-#endif
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;
         wake_tick += VOFA_PERIOD_MS;

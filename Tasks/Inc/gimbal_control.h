@@ -85,6 +85,8 @@ typedef struct
     float yaw_imu_actual_rad;
     float pitch_speed_target_rpm;
     float pitch_speed_rpm;
+    float pitch_motor_speed_rpm;
+    float pitch_imu_speed_rpm;
     float yaw_speed_rad_s;
     float gravity_feedforward;
     float pitch_gravity_ff_setting;

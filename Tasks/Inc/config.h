@@ -60,6 +60,8 @@
 /* ---------------- 云台反馈低通滤波 ---------------- */
 #define PITCH_ENCODER_LPF_ALPHA           0.15f
 #define PITCH_SPEED_LPF_ALPHA             0.20f
+/* 重力前馈单独滤波 Roll：只抑制前馈高频扰动，不给 Pitch 位置/速度环增加滞后。 */
+#define PITCH_GRAVITY_ROLL_LPF_ALPHA      0.05f
 #define YAW_ENCODER_LPF_ALPHA             0.40f   /* 位置反馈滞后↓(30°快移用) */
 #define YAW_SPEED_LPF_ALPHA               0.50f   /* 速度反馈滞后↓(30°快移用) */
 /* IMU Yaw 是当前的位置环测量值。进入位置 PID 前先滤波；电机编码器仍作为
@@ -91,26 +93,33 @@
 
 /* ---------------- Pitch：GM6020 外位置环 + 内速度环 ---------------- */
 #define PITCH_GM6020_CAN_ID                2U
-#define PITCH_GRAVITY_ONLY_ENABLE          0U
-#define PITCH_ANGLE_KP_RPM_PER_RAD        800.0f
+/* 前馈整定完成后必须启用位置/速度闭环；仅前馈无法在水平附近保持角度。 */
+#define PITCH_GRAVITY_ONLY_ENABLE         0U
+/* 新云台首次回零采用保守的外环：上电实测约 37° 偏差时，旧 800/90 组合
+ * 会立即以最大速度贯穿整个行程。确认方向和阻尼后再逐步增加。 */
+#define PITCH_ANGLE_KP_RPM_PER_RAD         75.0f
 #define PITCH_ANGLE_KI_RPM_PER_RAD_S      0.0f
-#define PITCH_ANGLE_KD_RPM_S_PER_RAD      32.5f
+/* 回零阶段的位置反馈来自 BMI088。1 ms 周期直接对该角度求导会把传感器噪声
+ * 放大到速度限幅，导致目标速度在 ±90 rpm 间翻转；Pitch 外环不使用 D 项。 */
+#define PITCH_ANGLE_KD_RPM_S_PER_RAD       2.5f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
 #define PITCH_MAX_SPEED_RPM                90.0f
-#define PITCH_SPEED_KP                    100.0f
-#define PITCH_SPEED_KI                     10.0f
+#define PITCH_SPEED_KP                     70.0f
+#define PITCH_SPEED_KI                      4.0f
 #define PITCH_SPEED_KD                    0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT         12000.0f
 #define PITCH_SPEED_OUTPUT_LIMIT           25000.0f
 #define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 70.0f
+/* 起步助推仅用于克服静摩擦。旧值 1 rpm/8000 会把 IMU 噪声造成的微小反向
+ * 速度请求放大为满幅翻转；只在明显运动请求时以受限幅值介入。 */
 #define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
-#define PITCH_STARTUP_MIN_VOLTAGE           8000.0f
+#define PITCH_STARTUP_MIN_VOLTAGE         8000.0f
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (10.0f * TASK_DEG_TO_RAD)
 /* 目标死区：位置误差小于该角(°)时位置环输出 0，靠重力前馈+速度环把轴稳住，
  * 防止齿距(背隙)在目标附近引起高频抖动。设 0 关闭死区；抖得凶就调大，但过大
  * 会降低到位精度(一般略大于背隙即可)。 */
 #define PITCH_POSITION_DEADZONE_RAD         (0.5f * TASK_DEG_TO_RAD)
-/* 实测机械限位(IMU 角度，rad)：-2.4260 ≈ -139°(向上最大)，-1.1170 ≈ -64°(向下最大)。
+/* 实测机械限位(IMU 角度，rad)：-2.4260 ≈ -139°(最高)，-1.1170 ≈ -64°(最低)。
  * 卡限幅检测(仅正常模式，gravity_only 不启用)：位置环给了大速度指令但 IMU 角速度
  * 很小 → 判定顶死在机械限位，把目标回锚到当前编码器位置。 */
 #define PITCH_LIMIT_MIN_RAD                (-2.4260f)
@@ -119,15 +128,15 @@
 #define PITCH_LIMIT_STALL_SPEED_RAD_S      0.3f    /* IMU 角速度小于此值(rad/s)判定没动 */
 #define PITCH_LIMIT_STALL_TIME_MS          150U    /* 卡限幅持续此时长才回锚(防阶跃起步误判) */
 #define PITCH_HOME_STABLE_TIME_MS          200U    /* 回零到位：水平死区内稳定此时长判定到达 */
-/* 重力前馈电压上限/默认值(与 GM6020 电压命令上限一致)。实际前馈电压 =
- * 该值 × PITCH_GRAVITY_SIGN × sin(pitch)，在 PITCH_GRAVITY_ANGLE_MIN/MAX 区间外为 0。
- * 若实测越加越往下掉，先取反 PITCH_GRAVITY_SIGN，而不是用负值命令。 */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         25000.0f
-#define PITCH_GRAVITY_ZERO_RAD            (-1.5708f)  /* =-90°：IMU pitch 的水平(重力零)参考 */
-#define PITCH_GRAVITY_ANGLE_MIN_DEG      (-24.34f)
-#define PITCH_GRAVITY_ANGLE_MAX_DEG       (49.58f)
-#define PITCH_GRAVITY_SIGN               1.0f
+/* 按模板工程的有符号正弦前馈，直接使用 Roll。驱动层将前馈加到
+ * 速度环输出，因此调用处会取负，实现模板中的“速度环输出 - 前馈”。 */
+#define PITCH_GRAVITY_FF_MAX_VOLTAGE         13000.0f
+#define PITCH_GRAVITY_ZERO_RAD             0.0f       /* Roll=0°：前馈过零 */
+#define PITCH_GRAVITY_SIGN                -1.0f
 #define PITCH_MOTOR_SIGN                  1.0f
+/* 编码器展开角度与 IMU Pitch 的增量方向。CSV 表明 I1 与 I11 反向：
+ * I11=-64° 为最低、-139° 为最高，因此该符号必须为 -1。 */
+#define PITCH_ENCODER_TO_IMU_SIGN        (-1.0f)
 #define PITCH_SOFT_LIMIT_DEG              90.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
