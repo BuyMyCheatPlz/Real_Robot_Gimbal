@@ -10,7 +10,7 @@
   该 BMI088 转了 90°（Y 轴朝上），姿态角参考垂直轴 Y：pitch=atan2(-az,ay)、
   roll=atan2(-ax,ay)，轴映射见 `config.h` 的 `IMU_*`。
 - 处理大疆 D-BUS 遥控数据和失联状态。
-- 检测 CH6～CH9 突变，生成 Pitch/Yaw 的 ±30° 增量命令。
+- 检测 CH4/CH1 摇杆越过死区边沿，生成 Pitch/Yaw 的 ±30° 增量命令。
 - 将姿态和角度增量通过 `Target_Angle` 队列发送给 `PID_calc`。
 - 解析 UART4 收到的在线 PID 调参命令，并通过 `Update_PID_para` 队列下发。
 - 将 S1、S2 三档映射后的发射机构目标速度通过 `Update_launch_para` 下发。
@@ -19,20 +19,23 @@
 
 `PID_calc` 以 1 kHz 运行：
 
-- Pitch 位置环用 GM6020 编码器展开增量换算后的 IMU Pitch 坐标作为实际值（上电/遥控
-  重连时锚定 BMI Pitch）；上电回零目标 = IMU 水平(`PITCH_GRAVITY_ZERO_RAD`=-90°)。
+- Pitch 位置环用 GM6020 编码器展开增量换算后的本机 Pitch 坐标作为实际值；上电/遥控
+  重连时用当前映射到 `roll_rad` 的 BMI088 姿态角建立零偏，上电回零目标 =
+  `PITCH_GRAVITY_ZERO_RAD`。
   位置环输出目标转速，进入 GM6020 速度 PID。
 - Pitch 位置环带目标死区（`PITCH_POSITION_DEADZONE_RAD`，默认 0.5°）：误差小于死区时
   位置环输出 0 并复位位置 PID，靠重力前馈+速度环稳住，防止齿距背隙在目标附近高频抖动。
 - Pitch 目标直接钳位到实测机械限位（`PITCH_LIMIT_MIN_RAD`/`PITCH_LIMIT_MAX_RAD`，
   IMU Pitch -139°（最高）~-64°（最低）），不靠卡限位检测。
-- Pitch 速度环反馈默认用 BMI088 陀螺 pitch 角速度（rad/s→rpm），直接测云台真实
-  角速度，不受减速/背隙/柔性影响；GM6020 编码器转速作为复位/离线时的回落反馈。
-- BMI088 解算出的 Pitch（带 -90° 零偏，水平=0）用于计算正弦重力电压前馈
-  （符号/幅值由 `PITCH_GRAVITY_*` 宏配置）。
+- Pitch 速度环反馈使用映射到 `roll_rate_rad_s` 的 BMI088 角速度（rad/s→deg/s），
+  直接测云台真实角速度，不受减速/背隙/柔性影响。最新三轴诊断确认本机 Pitch
+  主轴是 raw X，且与编码器实际角同向。
+- 正常运行时用连续的 Pitch 编码器角计算正弦重力电压前馈，避免 IMU 融合角和低通
+  滤波在阶跃中滞后（符号/幅值由 `PITCH_GRAVITY_*` 宏配置）。
 - IMU Yaw 归一化为 `[-180°, +180°)`；DM4310 编码器 yaw 保持连续展开，
   因而控制过编码器零点时不会跳变。
-- 上电时使用首次 BMI Pitch 给 GM6020 编码器建立零偏，Pitch 目标设为 IMU 水平(-90°)。
+- 上电时使用首次映射到 `roll_rad` 的 BMI088 姿态角给 GM6020 编码器建立零偏，
+  Pitch 目标设为 `PITCH_GRAVITY_ZERO_RAD`。
 - `YAW_COMMISSIONING_MODE=0` 时两个云台轴允许输出；
   `LAUNCH_MOTOR_OUTPUT_ENABLE=0` 会继续向发射机构发送零命令，避免调试云台时误启动。
 - Yaw 使用 DM4310 编码器位置作为实际值。限速度、限加速度轨迹同时生成位置、
@@ -96,20 +99,38 @@ M2006 额外有角度环（编码器在电机轴，拨盘在 P36 输出端，36:
 
 ## VOFA 与在线调参
 
-UART4 使用 115200 波特率和 RX/TX DMA。`vofa` 任务以绝对节拍每 10 ms 发送 9 个
-JustFloat 通道，帧尾为 `00 00 80 7F`：
+UART4 使用 115200 波特率和 RX/TX DMA。`vofa` 任务以绝对节拍每 10 ms 发送 8 个
+JustFloat 通道，帧尾为 `00 00 80 7F`。
 
-| VOFA 通道 | 正常模式内容 |
+`VOFA_IMU_AXIS_DEBUG_MODE=1` 时用于 BMI088 三轴方向确认，通道含义为：
+
+| VOFA 通道 | IMU 轴向诊断内容 |
+|---|---|
+| 1 | Pitch 目标角，° |
+| 2 | Pitch 编码器实际角，° |
+| 3 | BMI088 原始 X 轴角速度，°/s |
+| 4 | BMI088 原始 Y 轴角速度，°/s |
+| 5 | BMI088 原始 Z 轴角速度，°/s |
+| 6 | 当前映射后的 Roll 角速度，°/s |
+| 7 | 当前映射后的 Pitch 角速度，°/s |
+| 8 | 当前映射后的 Yaw 角速度，°/s |
+
+`VOFA_IMU_AXIS_DEBUG_MODE=0` 且 `VOFA_PITCH_TUNING_MODE=1` 时，Pitch 调参/重力前馈
+标定通道含义为：
+
+| VOFA 通道 | Pitch 调参内容 |
 |---|---|
 | 1 | Pitch 目标角，° |
 | 2 | Pitch 实际角，° |
-| 3 | Yaw 目标角，° |
-| 4 | Yaw 实际角，° |
-| 5 | M2006 目标发弹数（整数） |
-| 6 | M2006 实际发弹数（整数） |
-| 7 | M3508 ID2 实测转速，rpm |
-| 8 | M3508 ID3 实测转速，rpm |
-| 9 | 调参解析计数（每成功解析一条串口命令 +1） |
+| 3 | Pitch 轨迹目标角，° |
+| 4 | Pitch 速度目标，°/s |
+| 5 | Pitch IMU 实际速度，°/s |
+| 6 | Pitch 速度 PID 输出 |
+| 7 | Pitch 电机坐标系总前馈 |
+| 8 | Pitch 最终 CAN 电压命令 |
+
+`VOFA_IMU_AXIS_DEBUG_MODE=0` 且 `VOFA_PITCH_TUNING_MODE=0` 时，通道 3~8 恢复综合状态页：
+Yaw 目标/实际角、M2006 目标/实际输出角、M3508 ID2/ID3 实测转速。
 
 `YAW_SYSID_MODE=1` 辨识固件时，通道 7/8 改为：7=给 DM4310 的电流指令、8=yaw 原始
 速度(rpm)，且仅在辨识运行期间打印，运行结束自动静默。
@@ -143,7 +164,7 @@ UART4 命令接收保持开启（无换行时按接收空闲自动结束一条�
 | 宏 | 取值 | 作用 |
 |---|---|---|
 | `YAW_SYSID_MODE` | 0/1 | 0=正常闭环；1=yaw 系统辨识固件（pitch 不输出、yaw 直通正弦扫频，`identify_on` 触发，I6=电流指令、I7=原始速度） |
-| `PITCH_GRAVITY_ONLY_ENABLE` | 0/1 | 0=正常 Pitch 位置环；1=仅重力前馈（位置环旁路、速度目标=0），用于单独调试重力前馈 |
+| `PITCH_GRAVITY_ONLY_ENABLE` | 0/1 | 0=正常 Pitch 位置/速度闭环；1=仅重力前馈（位置环旁路、速度目标=0），用于单独标定重力前馈，完成后必须改回 0 |
 | `YAW_COMMISSIONING_MODE` | 0/1 | 0=双轴+发射正常；1=仅调试 yaw（pitch 与发射停发命令） |
 | `LAUNCH_MOTOR_OUTPUT_ENABLE` | 0/1 | 发射机构（M3508/M2006）是否允许输出；调试云台时设 0 防误启动 |
 | `YAW_CLOSED_LOOP_ENABLE` | 0/1 | 0=Yaw 开环（配合 `YAWTEST` 方向测试）；1=Yaw 位置闭环 |
@@ -153,8 +174,9 @@ Yaw 系统辨识参数：`YAW_SYSID_AMPLITUDE_CURRENT`（扫频幅值）、
 `YAW_SYSID_FREQ_START_HZ`、`YAW_SYSID_FREQ_END_HZ`、`YAW_SYSID_DURATION_MS`（单次时长）。
 
 Pitch 重力前馈参数：`PITCH_GRAVITY_FF_MAX_VOLTAGE`（电压幅值，运行时可由
-`PITCH_GRAVITY_FF` 命令覆盖）、`PITCH_GRAVITY_ZERO_RAD`（水平零点，默认 -90°）、
-`PITCH_GRAVITY_SIGN`（符号，方向反了会往下掉，取反即可）。
+`PITCH_GRAVITY_FF` 命令覆盖）、`PITCH_GRAVITY_ZERO_RAD`（前馈过零角）、
+`PITCH_GRAVITY_SIGN`（符号，方向反了会往下掉或上顶，取反即可）。标定时观察
+VOFA I6/I7：松手下坠说明幅值偏小，主动上顶说明幅值偏大。
 
 Pitch 机械限位：`PITCH_LIMIT_MIN_RAD`（最高，IMU -139°）、
 `PITCH_LIMIT_MAX_RAD`（最低，IMU -64°），目标直接钳位到该区间。

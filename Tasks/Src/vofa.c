@@ -7,8 +7,8 @@
 #include <string.h>
 
 #define VOFA_RX_DMA_LENGTH 64U
-/* 帧格式固定为 8 路：Pitch/Yaw 目标实际角、M2006 目标/实际输出角度、两颗 M3508 转速。
- * 发送长度必须与 channels 数组共用同一个通道数宏，避免把未初始化栈数据发出。 */
+/* 帧格式固定为 8 路。Pitch 整定模式下输出完整的串级控制链路；关闭该模式时
+ * 恢复综合状态页。发送长度必须与 channels 数组共用同一个通道数宏。 */
 #define VOFA_CHANNEL_COUNT VOFA_CONTROL_CHANNEL_COUNT
 #define VOFA_PAYLOAD_LENGTH (VOFA_CHANNEL_COUNT * sizeof(float))
 #define VOFA_TX_LENGTH      (VOFA_PAYLOAD_LENGTH + 4U)
@@ -178,9 +178,39 @@ void VOFA_print(void *argument)
         memcpy(&snapshot, (const void *)&gimbal_control_state,
                sizeof(snapshot));
         if (primask == 0U) __enable_irq();
-        /* 目标角 / 实际角（rad→°），供闭环跟踪整定观察。 */
+        /* I0/I1 固定为 Pitch 目标角 / 实际角（rad→°），方便所有模式下
+         * 对齐阶跃、重力前馈标定和速度轴诊断数据。 */
         channels[0] = snapshot.pitch_target_rad * 57.295779513082320876f;
         channels[1] = snapshot.pitch_encoder_rad * 57.295779513082320876f;
+#if (VOFA_IMU_AXIS_DEBUG_MODE != 0U)
+        /* BMI088 三轴方向诊断：
+         * I2/I3/I4 是芯片原始 X/Y/Z 角速度(°/s)，未做轴映射和符号；
+         * I5/I6/I7 是当前配置映射后的 Roll/Pitch/Yaw 角速度(°/s)。 */
+        channels[2] = snapshot.imu_gyro_raw_x_rad_s *
+                      57.295779513082320876f;
+        channels[3] = snapshot.imu_gyro_raw_y_rad_s *
+                      57.295779513082320876f;
+        channels[4] = snapshot.imu_gyro_raw_z_rad_s *
+                      57.295779513082320876f;
+        channels[5] = snapshot.imu_roll_rate_rad_s *
+                      57.295779513082320876f;
+        channels[6] = snapshot.imu_pitch_rate_rad_s *
+                      57.295779513082320876f;
+        channels[7] = snapshot.imu_yaw_rate_rad_s *
+                      57.295779513082320876f;
+#elif (VOFA_PITCH_TUNING_MODE != 0U)
+        /* Pitch 调参页：
+         * I2=轨迹角，I3=本轴速度目标，I4=IMU 实际速度，I5=速度 PID 输出，
+         * I6=电机坐标系总前馈，I7=最终 CAN 电压命令。仅前馈标定时 I6/I7
+         * 用于观察重力前馈输出。 */
+        channels[2] = snapshot.pitch_profile_target_rad *
+                      57.295779513082320876f;
+        channels[3] = snapshot.pitch_speed_target_rpm;
+        channels[4] = snapshot.pitch_speed_actual_deg_s;
+        channels[5] = snapshot.pitch_feedback_output;
+        channels[6] = snapshot.pitch_motor_feedforward;
+        channels[7] = (float)snapshot.pitch_can_command;
+#else
         channels[2] = snapshot.yaw_target_rad * 57.295779513082320876f;
         channels[3] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
         /* M2006 拨盘：目标/实际输出角度曲线(°) */
@@ -189,6 +219,7 @@ void VOFA_print(void *argument)
         /* I6/I7 = 两个 M3508 摩擦轮电机实测转速(rpm) */
         channels[6] = snapshot.m3508_id2_speed_rpm;
         channels[7] = snapshot.m3508_id3_speed_rpm;
+#endif
         (void)VOFA_SendControlFrame(channels);
         ++vofa_heartbeat;
         wake_tick += VOFA_PERIOD_MS;

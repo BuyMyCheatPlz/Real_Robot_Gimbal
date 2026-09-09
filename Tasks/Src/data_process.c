@@ -200,6 +200,9 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     float gx;
     float gy;
     float gz;
+    float raw_gx;
+    float raw_gy;
+    float raw_gz;
     float dt;
     uint32_t now;
     uint32_t sample_count;
@@ -213,6 +216,9 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     ax = IMU_ACCEL_X_SIGN * bmi088.acceleration_m_s2[IMU_ACCEL_X_AXIS];
     ay = IMU_ACCEL_Y_SIGN * bmi088.acceleration_m_s2[IMU_ACCEL_Y_AXIS];
     az = IMU_ACCEL_Z_SIGN * bmi088.acceleration_m_s2[IMU_ACCEL_Z_AXIS];
+    raw_gx = bmi088.angular_rate_rad_s[0];
+    raw_gy = bmi088.angular_rate_rad_s[1];
+    raw_gz = bmi088.angular_rate_rad_s[2];
     gx = IMU_GYRO_ROLL_SIGN *
          bmi088.angular_rate_rad_s[IMU_GYRO_ROLL_AXIS];
     gy = IMU_GYRO_PITCH_SIGN *
@@ -256,6 +262,10 @@ static uint8_t update_attitude(AttitudeEstimator_t *estimator,
     message->yaw_rad = estimator->yaw;
     message->roll_rate_rad_s = gx;
     message->pitch_rate_rad_s = gy;
+    message->yaw_rate_rad_s = gz;
+    message->gyro_raw_x_rad_s = raw_gx;
+    message->gyro_raw_y_rad_s = raw_gy;
+    message->gyro_raw_z_rad_s = raw_gz;
     message->timestamp_ms = now;
     message->flags |= GIMBAL_MSG_ATTITUDE;
     return 1U;

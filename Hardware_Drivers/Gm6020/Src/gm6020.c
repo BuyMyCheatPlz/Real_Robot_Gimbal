@@ -42,6 +42,7 @@ void GM6020_Decode(GM6020_t *motor, const uint8_t data[8], uint32_t now_ms)
 int16_t GM6020_Update(GM6020_t *motor, float dt_s)
 {
     float output;
+    float feedback_output;
     float speed_feedback_rpm;
     if (motor == 0) return 0;
     if (motor->feedback.online == 0U)
@@ -51,6 +52,7 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
         MotorSpeedPid_Reset(&motor->speed_pid);
         motor->speed_filter_initialized = 0U;
         motor->output_hold = 0U;   /* 离线解除保持，防止旧输出复活 */
+        motor->last_feedback_output = 0.0f;
         motor->last_output = 0.0f;
         return 0;
     }
@@ -76,10 +78,14 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
         motor->filtered_speed_rpm += motor->speed_filter_alpha *
             (speed_feedback_rpm - motor->filtered_speed_rpm);
     }
-    output = (float)MotorSpeedPid_Calculate(&motor->speed_pid,
-                                            motor->target_speed_rpm,
-                                            motor->filtered_speed_rpm, dt_s) +
-             motor->voltage_feedforward;
+    /* 前馈会占用一部分执行器余量。把剩余的非对称上下限传给 PID，
+     * 使积分器看到真正的最终饱和边界，而不是在 PID+前馈被二次裁剪时 windup。 */
+    feedback_output = MotorSpeedPid_CalculateFloatBounded(
+        &motor->speed_pid, motor->target_speed_rpm,
+        motor->filtered_speed_rpm, dt_s,
+        -GM6020_VOLTAGE_LIMIT - motor->voltage_feedforward,
+         GM6020_VOLTAGE_LIMIT - motor->voltage_feedforward);
+    output = feedback_output + motor->voltage_feedforward;
     if (output > GM6020_VOLTAGE_LIMIT) output = GM6020_VOLTAGE_LIMIT;
     if (output < -GM6020_VOLTAGE_LIMIT) output = -GM6020_VOLTAGE_LIMIT;
     if (fabsf(motor->target_speed_rpm) >= PITCH_STARTUP_SPEED_THRESHOLD_RPM &&
@@ -88,6 +94,7 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
         output = (motor->target_speed_rpm > 0.0f) ?
             PITCH_STARTUP_MIN_VOLTAGE : -PITCH_STARTUP_MIN_VOLTAGE;
     }
+    motor->last_feedback_output = feedback_output;
     motor->last_output = output;
     return (int16_t)output;
 }

@@ -7,6 +7,13 @@ static float clampf(float value, float limit)
     return value;
 }
 
+static float clamp_range(float value, float minimum, float maximum)
+{
+    if (value > maximum) return maximum;
+    if (value < minimum) return minimum;
+    return value;
+}
+
 void MotorSpeedPid_Init(MotorSpeedPid_t *pid, float kp, float ki,
                         float integral_limit, float output_limit)
 {
@@ -49,8 +56,11 @@ void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
         error_limit : 0.0f;
 }
 
-float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
-                                   float measured_rpm, float dt_s)
+float MotorSpeedPid_CalculateFloatBounded(MotorSpeedPid_t *pid,
+                                          float target_rpm,
+                                          float measured_rpm, float dt_s,
+                                          float output_min,
+                                          float output_max)
 {
     float error;
     float output;
@@ -59,6 +69,11 @@ float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
     float candidate_integral;
     uint8_t integrate;
     if ((pid == 0) || (dt_s <= 0.0f)) return 0.0f;
+    if (output_min < -pid->output_limit)
+        output_min = -pid->output_limit;
+    if (output_max > pid->output_limit)
+        output_max = pid->output_limit;
+    if (output_min > output_max) return 0.0f;
 
     error = target_rpm - measured_rpm;
     /* D 项与模板 pid.c 一致：kd*(e[k]-e[k-1])，每控制周期取一次差量，不除以 dt。
@@ -79,14 +94,24 @@ float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
                                     pid->integral_limit);
         output = proportional_derivative + candidate_integral;
         /* 执行器已经饱和时，不要继续向饱和方向积分；允许反向误差释放累加量。 */
-        if (((output < pid->output_limit) && (output > -pid->output_limit)) ||
-            ((output >= pid->output_limit) && (error < 0.0f)) ||
-            ((output <= -pid->output_limit) && (error > 0.0f)))
+        if (((output < output_max) && (output > output_min)) ||
+            ((output >= output_max) && (error < 0.0f)) ||
+            ((output <= output_min) && (error > 0.0f)))
             pid->integral = candidate_integral;
     }
     output = proportional_derivative + pid->integral;
-    output = clampf(output, pid->output_limit);
+    output = clamp_range(output, output_min, output_max);
     return output;
+}
+
+
+float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
+                                   float measured_rpm, float dt_s)
+{
+    if (pid == 0) return 0.0f;
+    return MotorSpeedPid_CalculateFloatBounded(
+        pid, target_rpm, measured_rpm, dt_s,
+        -pid->output_limit, pid->output_limit);
 }
 
 int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,

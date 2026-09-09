@@ -23,6 +23,7 @@ typedef struct
      * 避免 yaw 转动漏进 Roll 通道导致 pitch 速度环误动。 */
     uint8_t output_hold;
     int16_t held_output;
+    float last_feedback_output; /* 速度 PID 输出，不含前馈，供整定观测 */
     float last_output;    /* 最近一次正常(非保持)输出，用于进入保持时锁存 */
     DjiMotorFeedback_t feedback;
     MotorSpeedPid_t speed_pid;

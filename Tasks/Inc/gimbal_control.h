@@ -33,6 +33,10 @@ typedef struct
     float yaw_rad;
     float roll_rate_rad_s;    /* BMI 陀螺 Roll 角速度(rad/s)，本机 Pitch 速度环反馈 */
     float pitch_rate_rad_s;   /* BMI 陀螺 Pitch 角速度(rad/s)，供姿态诊断 */
+    float yaw_rate_rad_s;     /* BMI 陀螺 Yaw 角速度(rad/s)，供姿态诊断 */
+    float gyro_raw_x_rad_s;   /* BMI088 原始 X 轴角速度(rad/s)，未做轴映射/符号 */
+    float gyro_raw_y_rad_s;   /* BMI088 原始 Y 轴角速度(rad/s)，未做轴映射/符号 */
+    float gyro_raw_z_rad_s;   /* BMI088 原始 Z 轴角速度(rad/s)，未做轴映射/符号 */
     float pitch_delta_rad;
     float yaw_delta_rad;
     uint32_t timestamp_ms;
@@ -53,7 +57,12 @@ typedef enum
     PID_PARAM_YAW_KP_SPD,
     PID_PARAM_YAW_KI_SPD,
     PID_PARAM_YAW_KD_SPD,
-    PID_PARAM_PITCH_GRAVITY_FF
+    PID_PARAM_PITCH_GRAVITY_FF,
+    PID_PARAM_PITCH_TRAJ_SPEED,
+    PID_PARAM_PITCH_TRAJ_ACCEL,
+    PID_PARAM_PITCH_MAX_SPEED,
+    PID_PARAM_PITCH_VEL_FF,
+    PID_PARAM_PITCH_ACCEL_FF
 } PidParameterId_t;
 
 typedef struct
@@ -88,6 +97,10 @@ typedef struct
     float pitch_speed_rpm;
     float pitch_motor_speed_rpm;
     float pitch_imu_speed_rpm;
+    float pitch_profile_target_rad;
+    float pitch_speed_actual_deg_s;
+    float pitch_feedback_output;
+    float pitch_motor_feedforward;
     float yaw_speed_rad_s;
     float gravity_feedforward;
     float pitch_gravity_ff_setting;
@@ -102,6 +115,12 @@ typedef struct
     float imu_roll_rad;
     float imu_pitch_rad;
     float imu_yaw_rad;
+    float imu_gyro_raw_x_rad_s;
+    float imu_gyro_raw_y_rad_s;
+    float imu_gyro_raw_z_rad_s;
+    float imu_roll_rate_rad_s;
+    float imu_pitch_rate_rad_s;
+    float imu_yaw_rate_rad_s;
     uint32_t can_tx_failure_count;
     uint32_t can_bus_error_count;
     uint32_t can1_busoff_count;

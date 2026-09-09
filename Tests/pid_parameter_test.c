@@ -40,6 +40,17 @@ int main(void)
     assert(PidParameter_Parse("PITCH_GRAVITY_FF=30000", &update) != 0U);
     assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
     assert(fabsf(update.value - 30000.0f) < 0.0001f);
+
+    assert(PidParameter_Parse("PITCH_TRAJ_SPEED=1.2", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_TRAJ_SPEED);
+    assert(PidParameter_Parse("PITCH_TRAJ_ACCEL=8", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_TRAJ_ACCEL);
+    assert(PidParameter_Parse("PITCH_MAX_SPEED=70", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_MAX_SPEED);
+    assert(PidParameter_Parse("PITCH_VEL_FF=1", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_VEL_FF);
+    assert(PidParameter_Parse("PITCH_ACCEL_FF=0", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_ACCEL_FF);
     assert(PidParameter_Parse("PITCH_GRAVITY_FF_MAX_VOLTAGE=30000",
                              &update) != 0U);
     assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);

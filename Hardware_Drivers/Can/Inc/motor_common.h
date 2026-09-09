@@ -38,6 +38,14 @@ void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
                                          float error_limit);
 float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
                                    float measured_rpm, float dt_s);
+/* Calculate with the actuator headroom that remains after feedforward is
+ * reserved.  Bounds are limits for the PID contribution, not the final
+ * motor command. */
+float MotorSpeedPid_CalculateFloatBounded(MotorSpeedPid_t *pid,
+                                          float target_rpm,
+                                          float measured_rpm, float dt_s,
+                                          float output_min,
+                                          float output_max);
 int16_t MotorSpeedPid_Calculate(MotorSpeedPid_t *pid, float target_rpm,
                                 float measured_rpm, float dt_s);
 void DjiMotor_DecodeFeedback(DjiMotorFeedback_t *feedback,
