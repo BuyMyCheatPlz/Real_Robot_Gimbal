@@ -50,7 +50,7 @@ int main(void)
     assert(PITCH_ROLL_RATE_TO_SPEED_SIGN ==
            (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN));
     assert(PITCH_GRAVITY_FIT_MIN_DEG == -49.0f);
-    assert(PITCH_GRAVITY_FIT_MAX_DEG == 49.0f);
+    assert(PITCH_GRAVITY_FIT_MAX_DEG == 25.0f);
     assert(PITCH_GRAVITY_POLY_C0 == 1678.105241f);
     assert(PITCH_GRAVITY_C1_GR == 161.466898f);
     assert(PITCH_GRAVITY_POLY_C2 == -0.590091f);
@@ -60,12 +60,18 @@ int main(void)
     assert(IMU_GYRO_ROLL_SIGN == 1.0f);
     assert(IMU_GYRO_PITCH_AXIS == 2U);
     assert(IMU_GYRO_YAW_AXIS == 1U);
-    assert(PITCH_ANGLE_KP_RPM_PER_RAD == 23.4f);
-    assert(PITCH_ANGLE_KI_RPM_PER_RAD_S == 37.36f);
-    assert(PITCH_ANGLE_KD_RPM_S_PER_RAD == 100.0f);
+    assert(PITCH_ANGLE_KP_RPM_PER_RAD == 35.7f);
+    assert(PITCH_ANGLE_KI_RPM_PER_RAD_S == 5.21f);
+    assert(PITCH_ANGLE_KD_RPM_S_PER_RAD == 939.3f);
+    assert(PITCH_POSITION_D_NOTCH_ENABLE == 1U);
+    assert(PITCH_POSITION_D_NOTCH_CENTER_HZ == 32.0f);
+    assert(PITCH_POSITION_D_NOTCH_Q == 1.5f);
+    assert(PITCH_POSITION_D_NOTCH2_ENABLE == 1U);
+    assert(PITCH_POSITION_D_NOTCH2_CENTER_HZ == 23.7f);
+    assert(PITCH_POSITION_D_NOTCH2_Q == 1.5f);
     assert(PITCH_MAX_SPEED_RPM == 70.0f);
-    assert(PITCH_SPEED_KP == 194.44f);
-    assert(PITCH_SPEED_KI == 8.0f);
+    assert(PITCH_SPEED_KP == 172.6f);
+    assert(PITCH_SPEED_KI == 12.0f);
     assert(PITCH_SPEED_KD == 0.0f);
     assert(PITCH_STARTUP_SPEED_THRESHOLD_RPM == 1.0f);
     assert(PITCH_STARTUP_MIN_VOLTAGE >= 0.0f);

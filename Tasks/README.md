@@ -23,8 +23,10 @@
   重连时用当前映射到 `roll_rad` 的 BMI088 姿态角建立零偏。默认回到 IMU 水平零点；
   `PITCH_HOME_TO_POWER_ON_POSITION=1` 时改为以上电位置为零点并保持当前位置。
   位置环输出目标转速，进入 GM6020 速度 PID。
-- Pitch 位置环带目标死区（`PITCH_POSITION_DEADZONE_RAD`，默认 0.5°）：误差小于死区时
-  位置环输出 0 并复位位置 PID，靠重力前馈+速度环稳住，防止齿距背隙在目标附近高频抖动。
+- `PITCH_POSITION_DEADZONE_RAD` 当前仅为预留参数，未接入 Pitch 控制链；不能用
+  0.5° 死区掩盖抖动，否则会超过 MISSION 的 ±0.2°保持精度。
+- Pitch 位置环 D 的误差差分串联 23.7 Hz 与 32 Hz 陷波器，抑制 -60° 附近实测的
+  窄带机构共振；P/I、速度环与重力前馈链路保持不变。
 - Pitch 目标直接钳位到实测机械限位（`PITCH_LIMIT_MIN_RAD`/`PITCH_LIMIT_MAX_RAD`，
   IMU Pitch -139°（最高）~-64°（最低）），不靠卡限位检测。
 - `PITCH_SPEED_LIMIT_ENABLE=0` 时直接跟踪阶跃目标，不限制轨迹速度/加速度和位置环

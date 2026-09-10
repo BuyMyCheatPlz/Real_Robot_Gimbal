@@ -455,6 +455,11 @@
               <FilePath>../Tasks/Inc/pid_parameter.h</FilePath>
             </File>
             <File>
+              <FileName>notch_filter.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../Tasks/Inc/notch_filter.h</FilePath>
+            </File>
+            <File>
               <FileName>yaw_hold.h</FileName>
               <FileType>5</FileType>
               <FilePath>../Tasks/Inc/yaw_hold.h</FilePath>
@@ -478,6 +483,11 @@
               <FileName>pid_calc.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Tasks/Src/pid_calc.c</FilePath>
+            </File>
+            <File>
+              <FileName>notch_filter.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Tasks/Src/notch_filter.c</FilePath>
             </File>
             <File>
               <FileName>yaw_hold.c</FileName>

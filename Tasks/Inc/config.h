@@ -14,7 +14,7 @@
 #define LAUNCH_REMOTE_TIMEOUT_MS          100U
 #define LAUNCH_TASK_WAIT_MS               2U
 #define VOFA_PERIOD_MS                     5U
-#define VOFA_PITCH_TUNING_MODE              0U
+#define VOFA_PITCH_TUNING_MODE              1U
 /* 0：正常 Pitch 调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
 #define VOFA_IMU_AXIS_DEBUG_MODE            0U
 #define ONLINE_PID_VALUE_MAX              100000.0f
@@ -120,6 +120,22 @@
 /* Pitch 主要阻尼来自内层陀螺速度环；外环 D 只作为轨迹跟踪阻尼微调。 */
 #define PITCH_ANGLE_KD_RPM_S_PER_RAD       939.3f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
+/* 仅抑制实测 -60° 处的 Pitch 位置 D 窄带共振。陷波不进入 P/I、
+ * 速度环或前馈路径；3.33 Hz 增益保持 0.99 以上，避免影响 300 ms 阶跃要求。 */
+#define PITCH_POSITION_D_NOTCH_ENABLE         1U
+#define PITCH_POSITION_D_NOTCH_CENTER_HZ     32.0f
+#define PITCH_POSITION_D_NOTCH_Q              1.5f
+/* 新一轮 tuning mode 数据显示主振荡漂到 23.7 Hz，串联第二个陷波保留旧
+ * 32 Hz 抑制能力，同时压当前 -60° 稳态限环。 */
+#define PITCH_POSITION_D_NOTCH2_ENABLE        1U
+#define PITCH_POSITION_D_NOTCH2_CENTER_HZ    23.7f
+#define PITCH_POSITION_D_NOTCH2_Q             1.5f
+/* 低角度区位置 D 衰减：只改变外环 D 项，P/I、速度环和前馈不变。
+ * START 到 FULL 之间线性过渡；FULL 以下使用 SCALE。SCALE=1 表示不衰减。 */
+#define PITCH_POSITION_D_LOW_ANGLE_SCALE_ENABLE 1U
+#define PITCH_POSITION_D_LOW_ANGLE_START_DEG  (-45.0f)
+#define PITCH_POSITION_D_LOW_ANGLE_FULL_DEG   (-55.0f)
+#define PITCH_POSITION_D_LOW_ANGLE_SCALE        0.25f
 /* Pitch 限速总开关：0=不限制轨迹速度/加速度，也不限制位置环速度目标；
  * 1=使用 PITCH_MAX_SPEED_RPM 和 PITCH_TRAJECTORY_* 做保守阶跃。 */
 #define PITCH_SPEED_LIMIT_ENABLE           0U
@@ -145,9 +161,8 @@
 #define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
 #define PITCH_STARTUP_MIN_VOLTAGE           0.0f
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (0.0f * TASK_DEG_TO_RAD)
-/* 目标死区：位置误差小于该角(°)时位置环输出 0，靠重力前馈+速度环把轴稳住，
- * 防止齿距(背隙)在目标附近引起高频抖动。设 0 关闭死区；抖得凶就调大，但过大
- * 会降低到位精度(一般略大于背隙即可)。 */
+/* 预留的目标死区参数，当前未接入 Pitch 控制链。MISSION 要求保持在 ±0.2° 内，
+ * 因此不能直接启用当前 0.5° 数值来掩盖稳态抖动。 */
 #define PITCH_POSITION_DEADZONE_RAD         (0.5f * TASK_DEG_TO_RAD)
 /* 实测机械限位(IMU 角度，rad)：-2.4260 ≈ -139°(最高)，-1.1170 ≈ -64°(最低)。
  * 卡限幅检测(仅正常模式，gravity_only 不启用)：位置环给了大速度指令但 IMU 角速度

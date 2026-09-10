@@ -4,6 +4,7 @@
 #include "gm6020.h"
 #include "dm4310.h"
 #include "config.h"
+#include "notch_filter.h"
 #include "yaw_hold.h"
 #include "yaw_startup.h"
 #include <math.h>
@@ -35,6 +36,9 @@ typedef struct
      * 避免把 1 kHz 编码器差分放大 1/dt≈1000 倍。 */
     float previous_error;
     uint8_t initialized;
+    NotchFilter_t *derivative_notch;
+    NotchFilter_t *derivative_notch2;
+    float (*derivative_scale)(float measurement);
 } PositionPid_t;
 
 volatile GimbalControlState_t gimbal_control_state;
@@ -155,6 +159,28 @@ static float yaw_angle_difference(float target, float measurement)
     return normalize_yaw_rad(target - measurement);
 }
 
+static float pitch_position_d_scale(float measurement_deg)
+{
+#if (PITCH_POSITION_D_LOW_ANGLE_SCALE_ENABLE != 0U)
+    float scale = PITCH_POSITION_D_LOW_ANGLE_SCALE;
+    float start = PITCH_POSITION_D_LOW_ANGLE_START_DEG;
+    float full = PITCH_POSITION_D_LOW_ANGLE_FULL_DEG;
+    float blend;
+
+    if (scale < 0.0f) scale = 0.0f;
+    if (scale > 1.0f) scale = 1.0f;
+    if (full >= start) return scale;
+    if (measurement_deg >= start) return 1.0f;
+    if (measurement_deg <= full) return scale;
+
+    blend = (start - measurement_deg) / (start - full);
+    return 1.0f + (scale - 1.0f) * blend;
+#else
+    (void)measurement_deg;
+    return 1.0f;
+#endif
+}
+
 static float position_pid(PositionPid_t *pid, float target, float measurement,
                           float dt)
 {
@@ -167,7 +193,13 @@ static float position_pid(PositionPid_t *pid, float target, float measurement,
      * Pitch 主要阻尼在速度环；若确实要位置阻尼，增益按“每拍差量”标定，
      * 不要用 -(meas-prev)/dt 的每秒导数语义，否则同数值放大 ~1000 倍。 */
     if (pid->initialized != 0U)
+    {
         derivative = error - pid->previous_error;
+        derivative = NotchFilter_Update(pid->derivative_notch, derivative);
+        derivative = NotchFilter_Update(pid->derivative_notch2, derivative);
+        if (pid->derivative_scale != 0)
+            derivative *= pid->derivative_scale(measurement);
+    }
     else
         pid->initialized = 1U;
     pid->previous_error = error;
@@ -196,6 +228,8 @@ static void reset_position_pid(PositionPid_t *pid)
     pid->integral = 0.0f;
     pid->previous_error = 0.0f;
     pid->initialized = 0U;
+    NotchFilter_Reset(pid->derivative_notch);
+    NotchFilter_Reset(pid->derivative_notch2);
 }
 
 static float signf(float value)
@@ -275,17 +309,25 @@ void PID_calc(void *argument)
 {
     TargetAngleMessage_t message;
     PidParameterUpdate_t parameter_update;
+    NotchFilter_t pitch_position_d_notch;
+    NotchFilter_t pitch_position_d_notch2;
     PositionPid_t pitch_angle_pid = {
         PITCH_ANGLE_KP_RPM_PER_RAD, PITCH_ANGLE_KI_RPM_PER_RAD_S,
         PITCH_ANGLE_KD_RPM_S_PER_RAD, 0.0f, PITCH_ANGLE_INTEGRAL_LIMIT_RPM,
         PITCH_ANGLE_INTEGRAL_SEPARATION_RAD * RAD_TO_DEG,
         (PITCH_SPEED_LIMIT_ENABLE != 0U) ? PITCH_MAX_SPEED_RPM :
-        ONLINE_PID_VALUE_MAX, 0.0f, 0U
+        ONLINE_PID_VALUE_MAX, 0.0f, 0U,
+        (PITCH_POSITION_D_NOTCH_ENABLE != 0U) ?
+        &pitch_position_d_notch : 0,
+        (PITCH_POSITION_D_NOTCH2_ENABLE != 0U) ?
+        &pitch_position_d_notch2 : 0,
+        pitch_position_d_scale
     };
     PositionPid_t yaw_angle_pid = {
         YAW_ANGLE_KP_RAD_S_PER_RAD, YAW_ANGLE_KI_RAD_S_PER_RAD_S,
         YAW_ANGLE_KD_RAD_S2_PER_RAD, 0.0f, YAW_ANGLE_INTEGRAL_LIMIT_RAD_S,
-        YAW_ANGLE_INTEGRAL_SEPARATION_RAD, YAW_MAX_SPEED_RAD_S, 0.0f, 0U
+        YAW_ANGLE_INTEGRAL_SEPARATION_RAD, YAW_MAX_SPEED_RAD_S, 0.0f, 0U, 0,
+        0, 0
     };
     const YawHoldConfig_t yaw_hold_config = {
         YAW_HOLD_ENTER_ERROR_RAD,
@@ -354,6 +396,12 @@ void PID_calc(void *argument)
     float pitch_held_gravity_ff = 0.0f;    /* 保持期间用于遥测/恢复的前馈值 */
     uint32_t pitch_hold_until_ms = 0U;     /* 收到 yaw 指令后的锁存到期时刻(0=无锁存请求) */
     (void)argument;
+    NotchFilter_Init(&pitch_position_d_notch, 1.0f / CONTROL_PERIOD_S,
+                     PITCH_POSITION_D_NOTCH_CENTER_HZ,
+                     PITCH_POSITION_D_NOTCH_Q);
+    NotchFilter_Init(&pitch_position_d_notch2, 1.0f / CONTROL_PERIOD_S,
+                     PITCH_POSITION_D_NOTCH2_CENTER_HZ,
+                     PITCH_POSITION_D_NOTCH2_Q);
     memset((void *)&gimbal_control_state, 0, sizeof(gimbal_control_state));
     MotorSpeedPid_Init(&can1_gm6020_id2.speed_pid, PITCH_SPEED_KP,
                        PITCH_SPEED_KI, PITCH_SPEED_INTEGRAL_LIMIT,
