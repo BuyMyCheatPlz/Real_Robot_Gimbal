@@ -8,19 +8,18 @@ int main(void)
     };
     YawHoldState_t state = {0U};
 
-    /* The plant is closely following the reference, but the reference is
-     * still far from the final 30-degree target.  Entering hold here creates
-     * the observed drive/brake limit cycle. */
+    /* 被控对象虽然紧跟轨迹参考，但轨迹参考仍远离最终 30° 目标。
+     * 此时进入保持会产生实测到的驱动/刹车极限环。 */
     assert(YawHold_Update(&state, &config,
                           0.5235988f, 0.1000f, 0.15f,
                           0.0995f, 1.40f) == 0U);
 
-    /* Hold may be entered only after both trajectory and motor have settled. */
+    /* 只有轨迹和电机都稳定后才允许进入保持。 */
     assert(YawHold_Update(&state, &config,
                           0.5235988f, 0.5235988f, 0.0f,
                           0.5225988f, 0.10f) != 0U);
 
-    /* Hysteresis prevents chatter between the enter and exit thresholds. */
+    /* 滞回用于防止在进入/退出阈值之间来回抖动。 */
     assert(YawHold_Update(&state, &config,
                           0.5235988f, 0.5235988f, 0.0f,
                           0.5210988f, 0.10f) != 0U);
@@ -28,7 +27,7 @@ int main(void)
                           0.5235988f, 0.5235988f, 0.0f,
                           0.5185988f, 0.10f) == 0U);
 
-    /* A stationary-position coincidence at high speed is not settled. */
+    /* 高速运动时即使位置瞬间重合，也不能视为稳定。 */
     assert(YawHold_Update(&state, &config,
                           0.5235988f, 0.5235988f, 0.0f,
                           0.5235988f, 2.0f) == 0U);

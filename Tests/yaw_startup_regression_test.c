@@ -9,25 +9,24 @@ int main(void)
     };
     YawStartupState_t state = {0U};
 
-    /* One apparently quiet frame is not enough to energize the yaw loop. */
+    /* 单帧看似静止的反馈不足以给 yaw 闭环上电。 */
     assert(YawStartup_Update(&state, &config,
                              1000U, 1000U, 3.4000f, 0.10f) == 0U);
     assert(YawStartup_Update(&state, &config,
                              1050U, 1000U, 3.4000f, 0.10f) == 0U);
 
-    /* A fresh high-speed frame restarts the zero-current settling window. */
+    /* 新鲜的高速反馈帧会重新开始零电流稳定窗口。 */
     assert(YawStartup_Update(&state, &config,
                              1052U, 1052U, 3.4100f, 8.00f) == 0U);
     assert(YawStartup_Update(&state, &config,
                              1100U, 1100U, 3.4105f, 0.10f) == 0U);
 
-    /* Excess position drift also restarts the window, even when reported
-     * speed happens to be small. */
+    /* 位置漂移过大也会重启稳定窗口，即使反馈速度恰好较小。 */
     assert(YawStartup_Update(&state, &config,
                              1160U, 1160U, 3.4145f, 0.10f) == 0U);
 
-    /* Closed loop is released only after a full stable interval made from
-     * fresh motor frames.  The caller then captures this current position. */
+    /* 只有由新鲜电机反馈组成的完整稳定区间结束后，才释放闭环。
+     * 调用方随后捕获当前位置。 */
     assert(YawStartup_Update(&state, &config,
                              1210U, 1210U, 3.4148f, 0.10f) == 0U);
     assert(YawStartup_Update(&state, &config,
@@ -38,9 +37,8 @@ int main(void)
     assert(state.ready == 0U);
     assert(state.have_feedback == 0U);
 
-    /* The DM4310 feedback stream can be slower than the 1 ms control task.
-     * A 20 ms control iteration between valid 40 ms feedback frames must not
-     * restart a genuinely stable startup window. */
+    /* DM4310 反馈流可能慢于 1 ms 控制任务。有效 40 ms 反馈帧之间的
+     * 20 ms 控制迭代，不应重启真正稳定的启动窗口。 */
     {
         const YawStartupConfig_t sparse_feedback_config = {
             200U, YAW_STARTUP_MAX_FEEDBACK_AGE_MS, 0.50f, 0.0035f

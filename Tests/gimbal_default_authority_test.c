@@ -31,10 +31,8 @@ int main(void)
     GM6020_SetSpeed(&pitch, pitch_speed_target);
     pitch_command = GM6020_Update(&pitch, CONTROL_PERIOD_S);
 
-    /* This unit test directly feeds the position-loop result into the speed
-     * loop, so it deliberately bypasses PITCH_MAX_SPEED_RPM.  On the first
-     * sample the PI integral is zero and the command must equal Kp * target
-     * (bounded only by the GM6020 output limit). */
+    /* 该单元测试把位置环结果直接送入速度环，因此有意绕过 PITCH_MAX_SPEED_RPM。
+     * 首个采样点 PI 积分为 0，命令必须等于 Kp * 目标值，只受 GM6020 输出限幅约束。 */
     expected_pitch_command = (int)(PITCH_SPEED_KP * pitch_speed_target);
     if (expected_pitch_command > (int)GM6020_VOLTAGE_LIMIT)
         expected_pitch_command = (int)GM6020_VOLTAGE_LIMIT;
@@ -43,8 +41,7 @@ int main(void)
         expected_pitch_command = (pitch_speed_target > 0.0f) ?
             (int)PITCH_STARTUP_MIN_VOLTAGE :
             -(int)PITCH_STARTUP_MIN_VOLTAGE;
-    /* Float evaluation order differs slightly between host compilers and the
-     * target FPU; conversion to int16 may differ by one LSB. */
+    /* 主机编译器与目标 FPU 的浮点评估顺序略有差异，转成 int16 时可能相差 1 个 LSB。 */
     assert(abs((int)pitch_command - expected_pitch_command) <= 1);
     assert(PITCH_GRAVITY_FF_MAX_VOLTAGE == 6500.0f);
     assert(PITCH_GRAVITY_ONLY_ENABLE == 1U);
@@ -60,9 +57,8 @@ int main(void)
     assert(IMU_GYRO_ROLL_SIGN == 1.0f);
     assert(IMU_GYRO_PITCH_AXIS == 2U);
     assert(IMU_GYRO_YAW_AXIS == 1U);
-    /* Template mapping: ff=K*sin(Pitch); final motor command is
-     * PID-ff.  The local driver adds its feedforward term, so it receives
-     * -ff. */
+    /* 重力前馈为 K*sin(Pitch)，最终电机命令为 PID-ff。
+     * 驱动层会加上前馈项，因此这里传入 -ff。 */
     ff_at_low_pitch_roll = PITCH_GRAVITY_SIGN *
         sinf(-29.769482f * TASK_DEG_TO_RAD);
     ff_at_raised_pitch_roll = PITCH_GRAVITY_SIGN *
@@ -119,19 +115,17 @@ int main(void)
     DM4310_SetSpeed(&yaw, 100.0f);
     yaw_command = DM4310_Update(&yaw, CONTROL_PERIOD_S);
 
-    /* After correcting the DM4310 command slots to little-endian, 20 is sent
-     * as 14 00 and no longer becomes the byte-swapped value 5120. */
+    /* DM4310 命令槽修正为小端后，20 会发送为 14 00，
+     * 不再变成字节序错误的 5120。 */
     assert(abs(yaw_command) <= 1000);
-    /* A large yaw error must request enough speed/current to overcome the
-     * measured static friction; the former 0.08 rad/s trajectory and 1.0
-     * current/rpm path produced only about 5 current counts. */
+    /* 大 yaw 误差必须请求足够的速度/电流以克服实测静摩擦；旧的 0.08 rad/s
+     * 轨迹和 1.0 电流/rpm 路径只能产生约 5 个电流计数。 */
     assert(YAW_MAX_SPEED_RAD_S >= 0.5f);
     assert(YAW_TRAJECTORY_MAX_SPEED_RAD_S >= 0.4f);
     assert(YAW_SPEED_KP_CURRENT_PER_RPM >= 20.0f);
     assert(YAW_DIRECTION_TEST_MAX_CURRENT <= DM4310_CURRENT_COMMAND_LIMIT);
-    /* DM4310 current command is a signed 16-bit protocol value; this is the
-     * configured protocol safety ceiling, not the deliberately smaller
-     * direction-test current above. */
+    /* DM4310 电流命令是有符号 16 位协议值；这里检查配置的协议安全上限，
+     * 不是上面故意设小的方向测试电流。 */
     assert(DM4310_CURRENT_COMMAND_LIMIT <= 16384.0f);
     assert((YAW_VELOCITY_FF_GAIN > 0.0f) &&
            (YAW_VELOCITY_FF_GAIN <= 1.0f));

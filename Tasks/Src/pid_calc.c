@@ -32,7 +32,7 @@ typedef struct
     float integral_separation_error;
     float output_limit;
     /* D 项上一拍误差 e[k-1]。D = kd*(e[k]-e[k-1])（每 1 ms 一拍，不除以 dt），
-     * 与模板 pid.c 语义一致，避免把 1 kHz 编码器差分放大 1/dt≈1000 倍。 */
+     * 避免把 1 kHz 编码器差分放大 1/dt≈1000 倍。 */
     float previous_error;
     uint8_t initialized;
 } PositionPid_t;
@@ -162,9 +162,8 @@ static float position_pid(PositionPid_t *pid, float target, float measurement,
     float proportional_derivative;
     float candidate_integral;
     uint8_t integrate;
-    /* D 项 = kd*(e[k]-e[k-1])，与模板 pid.c 一致（每拍误差差量，不除以 dt）。
-     * 模板 pitch 位置环不用 D（=0），阻尼在速度环；若确实要位置阻尼，
-     * 增益按“每拍差量”标定（模板 yaw 用 296.92 属此量级），
+    /* D 项 = kd*(e[k]-e[k-1])（每拍误差差量，不除以 dt）。
+     * Pitch 主要阻尼在速度环；若确实要位置阻尼，增益按“每拍差量”标定，
      * 不要用 -(meas-prev)/dt 的每秒导数语义，否则同数值放大 ~1000 倍。 */
     if (pid->initialized != 0U)
         derivative = error - pid->previous_error;
@@ -306,6 +305,7 @@ void PID_calc(void *argument)
     float pitch_profile_speed = 0.0f;
     float pitch_profile_acceleration = 0.0f;
     float pitch_gravity_ff_voltage = PITCH_GRAVITY_FF_MAX_VOLTAGE;
+    float pitch_gravity_angle_offset = 0.0f;
     float pitch_trajectory_max_speed = PITCH_TRAJECTORY_MAX_SPEED_RAD_S;
     float pitch_trajectory_max_accel = PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2;
     float pitch_max_speed_deg_s = PITCH_MAX_SPEED_RPM;
@@ -633,6 +633,7 @@ void PID_calc(void *argument)
                 pitch_hold_until_ms = 0U;
                 pitch_profile_speed = 0.0f;
                 pitch_profile_acceleration = 0.0f;
+                pitch_gravity_angle_offset = 0.0f;
             }
             if (yaw_control_permitted == 0U)
             {
@@ -653,8 +654,18 @@ void PID_calc(void *argument)
                 /* 本机物理 Pitch 在控制链路中沿用历史变量名 imu_roll；
                  * 当前配置已把该量映射到 BMI088 raw X。上电用该角建立编码器
                  * 零偏；后续位置环和重力前馈使用连续编码器角。 */
-                pitch_encoder_offset = pitch_encoder_filtered - imu_roll;
-                pitch_angle_actual = imu_roll;
+                if (PITCH_HOME_TO_POWER_ON_POSITION != 0U)
+                {
+                    pitch_encoder_offset = pitch_encoder_filtered;
+                    pitch_angle_actual = 0.0f;
+                    pitch_gravity_angle_offset = imu_roll;
+                }
+                else
+                {
+                    pitch_encoder_offset = pitch_encoder_filtered - imu_roll;
+                    pitch_angle_actual = imu_roll;
+                    pitch_gravity_angle_offset = 0.0f;
+                }
                 pitch_home = 0.0f;
                 pitch_target = pitch_home + pending_pitch_delta;
                 pending_pitch_delta = 0.0f;
@@ -925,12 +936,13 @@ void PID_calc(void *argument)
                                 pitch_speed_target_rpm,
                                 pitch_max_speed_deg_s);
                         }
-                        /* 模板的合成是 PID - ff；本驱动固定做 PID + 前馈，
-                         * 故这里传入 -ff。使用编码器 Pitch 角可避免 IMU 融合角和
+                        /* 本工程采用“速度环输出 - 重力前馈”的合成方式；驱动固定做
+                         * PID + 前馈，故这里传入 -ff。使用编码器 Pitch 角可避免 IMU 融合角和
                          * 额外低通在阶跃中滞后，把重力补偿打到错误相位。 */
                         gravity_feedforward = pitch_gravity_ff_voltage *
                             pitch_gravity_feedforward_scale(
-                                pitch_angle_actual);
+                                pitch_angle_actual +
+                                pitch_gravity_angle_offset);
                         pitch_acceleration_ff = pitch_accel_ff_gain *
                             pitch_profile_acceleration;
                         pitch_motor_feedforward =
@@ -942,7 +954,7 @@ void PID_calc(void *argument)
                         GM6020_SetSpeed(&can1_gm6020_id2,
                                        PITCH_CONTROL_TO_MOTOR_SIGN *
                                        pitch_speed_target_rpm);
-                        /* 模板使用物理轴的 IMU 角速度闭环。本机 Pitch 对应 Roll，
+                        /* 本工程使用物理轴的 IMU 角速度闭环。本机 Pitch 对应 Roll，
                          * 因而位置仍由编码器给出、速度由 Roll 陀螺给出。 */
                         can1_gm6020_id2.external_speed_rpm =
                             PITCH_ROLL_RATE_TO_SPEED_SIGN *
@@ -971,6 +983,7 @@ void PID_calc(void *argument)
                     pitch_hold_until_ms = 0U;
                     pitch_profile_speed = 0.0f;
                     pitch_profile_acceleration = 0.0f;
+                    pitch_gravity_angle_offset = 0.0f;
                     gimbal_control_state.active = 0U;
                     gimbal_control_state.gravity_feedforward = 0.0f;
                 }

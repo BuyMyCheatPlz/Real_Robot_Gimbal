@@ -12,8 +12,7 @@ typedef struct
     float integral_limit;
     float integral_separation_error;
     float output_limit;
-    /* D 项上一拍误差 e[k-1]。D = kd*(e[k]-e[k-1])（每 1 ms 一拍，不除以 dt），
-     * 与模板 pid.c 语义一致，可直接使用模板整定数值。 */
+    /* D 项上一拍误差 e[k-1]。D = kd*(e[k]-e[k-1])（每 1 ms 一拍，不除以 dt）。 */
     float previous_error;
     uint8_t initialized;
 } MotorSpeedPid_t;
@@ -38,9 +37,8 @@ void MotorSpeedPid_SetIntegralSeparation(MotorSpeedPid_t *pid,
                                          float error_limit);
 float MotorSpeedPid_CalculateFloat(MotorSpeedPid_t *pid, float target_rpm,
                                    float measured_rpm, float dt_s);
-/* Calculate with the actuator headroom that remains after feedforward is
- * reserved.  Bounds are limits for the PID contribution, not the final
- * motor command. */
+/* 按预留前馈后的执行器剩余余量计算。上下界限制的是 PID 贡献，
+ * 不是最终电机命令。 */
 float MotorSpeedPid_CalculateFloatBounded(MotorSpeedPid_t *pid,
                                           float target_rpm,
                                           float measured_rpm, float dt_s,

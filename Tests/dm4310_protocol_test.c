@@ -18,10 +18,10 @@ int main(void)
     uint8_t command[8];
     uint8_t snapshot[8];
     uint8_t feedback[8] = {
-        0x1FU, 0xFFU,       /* 8191 counts */
+        0x1FU, 0xFFU,       /* 8191 个计数 */
         0xCFU, 0xC7U,       /* -12345 -> -123.45 rpm */
         0xFCU, 0x18U,       /* -1000 mA */
-        55U, 60U            /* winding / PCB temperature */
+        55U, 60U            /* 绕组 / PCB 温度 */
     };
     uint16_t std_id = 0U;
     uint8_t id;
@@ -94,9 +94,8 @@ int main(void)
     DM4310_SetCurrentFeedforward(&motor, 20000);
     assert(DM4310_Update(&motor, 0.001f) == 1000);
 
-    /* Low-torque PID and feedforward values must survive the integer wire
-     * format as a bounded pulse-density average instead of truncating to
-     * zero and creating a large position dead zone. */
+    /* 小力矩 PID 和前馈值必须通过有界脉冲密度平均保留到整数协议格式中，
+     * 不能直接截断成 0 并造成较大的位置死区。 */
     DM4310_Init(&motor, 1U, 0.0f, 0.0f);
     motor.online = 1U;
     DM4310_SetCurrentFeedforward(&motor, 0.25f);

@@ -20,8 +20,8 @@
 `PID_calc` 以 1 kHz 运行：
 
 - Pitch 位置环用 GM6020 编码器展开增量换算后的本机 Pitch 坐标作为实际值；上电/遥控
-  重连时用当前映射到 `roll_rad` 的 BMI088 姿态角建立零偏，上电回零目标 =
-  `PITCH_GRAVITY_ZERO_RAD`。
+  重连时用当前映射到 `roll_rad` 的 BMI088 姿态角建立零偏。默认回到 IMU 水平零点；
+  `PITCH_HOME_TO_POWER_ON_POSITION=1` 时改为以上电位置为零点并保持当前位置。
   位置环输出目标转速，进入 GM6020 速度 PID。
 - Pitch 位置环带目标死区（`PITCH_POSITION_DEADZONE_RAD`，默认 0.5°）：误差小于死区时
   位置环输出 0 并复位位置 PID，靠重力前馈+速度环稳住，防止齿距背隙在目标附近高频抖动。
@@ -34,8 +34,8 @@
   滤波在阶跃中滞后（符号/幅值由 `PITCH_GRAVITY_*` 宏配置）。
 - IMU Yaw 归一化为 `[-180°, +180°)`；DM4310 编码器 yaw 保持连续展开，
   因而控制过编码器零点时不会跳变。
-- 上电时使用首次映射到 `roll_rad` 的 BMI088 姿态角给 GM6020 编码器建立零偏，
-  Pitch 目标设为 `PITCH_GRAVITY_ZERO_RAD`。
+- 上电时使用首次映射到 `roll_rad` 的 BMI088 姿态角给 GM6020 编码器建立零偏；
+  Pitch 默认目标为 IMU 水平零点，也可配置为保持上电位置。
 - `YAW_COMMISSIONING_MODE=0` 时两个云台轴允许输出；
   `LAUNCH_MOTOR_OUTPUT_ENABLE=0` 会继续向发射机构发送零命令，避免调试云台时误启动。
 - Yaw 使用 DM4310 编码器位置作为实际值。限速度、限加速度轨迹同时生成位置、
@@ -99,7 +99,7 @@ M2006 额外有角度环（编码器在电机轴，拨盘在 P36 输出端，36:
 
 ## VOFA 与在线调参
 
-UART4 使用 115200 波特率和 RX/TX DMA。`vofa` 任务以绝对节拍每 10 ms 发送 8 个
+UART4 使用 115200 波特率和 RX/TX DMA。`vofa` 任务以绝对节拍每 5 ms 发送 8 个
 JustFloat 通道，帧尾为 `00 00 80 7F`。
 
 `VOFA_IMU_AXIS_DEBUG_MODE=1` 时用于 BMI088 三轴方向确认，通道含义为：
@@ -170,6 +170,7 @@ UART4 命令接收保持开启（无换行时按接收空闲自动结束一条�
 | `LAUNCH_MOTOR_OUTPUT_ENABLE` | 0/1 | 发射机构（M3508/M2006）是否允许输出；调试云台时设 0 防误启动 |
 | `YAW_CLOSED_LOOP_ENABLE` | 0/1 | 0=Yaw 开环（配合 `YAWTEST` 方向测试）；1=Yaw 位置闭环 |
 | `YAW_HOME_TO_IMU_ZERO_ON_AUTHORIZE` | 0/1 | 0=授权时保持当前 Yaw；1=授权/遥控重连时自动回 BMI Yaw 零点 |
+| `PITCH_HOME_TO_POWER_ON_POSITION` | 0/1 | 0=Pitch 授权时回 IMU 水平零点；1=以上电位置为零点并保持当前位置 |
 
 Yaw 系统辨识参数：`YAW_SYSID_AMPLITUDE_CURRENT`（扫频幅值）、
 `YAW_SYSID_FREQ_START_HZ`、`YAW_SYSID_FREQ_END_HZ`、`YAW_SYSID_DURATION_MS`（单次时长）。

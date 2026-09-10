@@ -23,17 +23,15 @@ int main(void)
     assert(MotorSpeedPid_Calculate(&pid, -1.0f, 0.0f, 1.0f) == -45);
     assert(pid.integral == 10.0f);
 
-    /* A positive feedforward can consume all positive actuator headroom.
-     * The feedback PID must use the remaining asymmetric limits; otherwise
-     * its integrator winds up even though the final motor command is already
-     * saturated after feedforward is added. */
+    /* 正向前馈可能耗尽执行器正向余量。反馈 PID 必须使用剩余的非对称限幅；
+     * 否则最终电机命令在叠加前馈后已经饱和，积分器仍会继续饱和累积。 */
     MotorSpeedPid_Init(&pid, 0.0f, 10.0f, 100.0f, 50.0f);
     output = MotorSpeedPid_CalculateFloatBounded(
         &pid, 1.0f, 0.0f, 1.0f, -50.0f, 0.0f);
     assert(output == 0.0f);
     assert(pid.integral == 0.0f);
 
-    /* The opposite error must still be allowed to generate braking torque. */
+    /* 反向误差仍必须允许产生制动力矩。 */
     output = MotorSpeedPid_CalculateFloatBounded(
         &pid, -1.0f, 0.0f, 1.0f, -50.0f, 0.0f);
     assert(output == -10.0f);

@@ -79,7 +79,7 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
             (speed_feedback_rpm - motor->filtered_speed_rpm);
     }
     /* 前馈会占用一部分执行器余量。把剩余的非对称上下限传给 PID，
-     * 使积分器看到真正的最终饱和边界，而不是在 PID+前馈被二次裁剪时 windup。 */
+     * 使积分器看到真正的最终饱和边界，而不是在 PID+前馈被二次裁剪时饱和累积。 */
     feedback_output = MotorSpeedPid_CalculateFloatBounded(
         &motor->speed_pid, motor->target_speed_rpm,
         motor->filtered_speed_rpm, dt_s,

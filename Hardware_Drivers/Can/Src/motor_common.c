@@ -76,9 +76,9 @@ float MotorSpeedPid_CalculateFloatBounded(MotorSpeedPid_t *pid,
     if (output_min > output_max) return 0.0f;
 
     error = target_rpm - measured_rpm;
-    /* D 项与模板 pid.c 一致：kd*(e[k]-e[k-1])，每控制周期取一次差量，不除以 dt。
+    /* D 项为 kd*(e[k]-e[k-1])，每控制周期取一次差量，不除以 dt。
      * 切勿改写成 -(meas-prev)/dt 的“每秒导数”：dt=1 ms 时同一 kd 数值会被放大
-     * 1/dt≈1000 倍（模板 60.85 → 直接顶到 ±25000 满幅 → 剧烈抖振）。 */
+     * 1/dt≈1000 倍，直接顶到输出限幅并造成剧烈抖振。 */
     if (pid->initialized != 0U)
         derivative = error - pid->previous_error;
     else

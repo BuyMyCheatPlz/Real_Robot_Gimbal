@@ -159,7 +159,7 @@ int main(void)
     can1.Instance = (void *)1;
     can2.Instance = (void *)2;
     assert(CanMotorBus_Init(&can1, &can2) == HAL_OK);
-    /* The configured filters must admit every deployed motor feedback ID. */
+    /* 已配置的滤波器必须放行所有实装电机的反馈 ID。 */
     assert((configured_filters[0].FilterIdHigh == (0x202U << 5)) &&
            (configured_filters[0].FilterIdLow == (0x203U << 5)) &&
            (configured_filters[0].FilterMaskIdHigh == (0x206U << 5)) &&
@@ -169,8 +169,7 @@ int main(void)
            (configured_filters[1].FilterMaskIdHigh == (0x205U << 5)) &&
            (configured_filters[1].FilterMaskIdLow == (0x301U << 5)));
 
-    /* An accepted FIFO0 frame must reach its motor decoder through the ISR
-     * callback, rather than only being counted. */
+    /* FIFO0 接收的帧必须通过中断回调进入对应电机解码器，不能只增加计数。 */
     {
         const uint8_t dji_feedback[8] = {0x12U, 0x34U, 0x00U, 0x64U,
                                          0x00U, 0x00U, 0x32U, 0U};
@@ -190,9 +189,8 @@ int main(void)
                (can2_dm4310_id1.speed_rpm == 1.0f));
     }
 
-    /* A DM4310 can need control keepalive frames before it resumes feedback.
-     * Losing feedback must therefore send a zero-current 0x3FE frame, not
-     * silence the motor bus and make the offline state self-perpetuating. */
+    /* DM4310 恢复反馈前可能需要持续收到控制保活帧。因此反馈丢失时仍要发送
+     * 0 电流 0x3FE 帧，不能让电机总线静默并造成离线状态自锁。 */
     sent_count = 0U;
     assert(CanMotorBus_StopGimbal(0.001f) == HAL_OK);
     frame = find_frame(DM4310_CURRENT_CONTROL_ID_1_TO_4);
@@ -231,8 +229,8 @@ int main(void)
     sent_count = 0U;
     fake_tick += CAN_COMMAND_PERIOD_MS;
     assert(CanMotorBus_UpdateSelected(0.001f, 1U, 0U) == HAL_OK);
-    /* GM6020 ID2 feedback uses 0x206.  Its voltage command belongs in
-     * 0x1FF, with ID2 in bytes 2..3. */
+    /* GM6020 ID2 的反馈帧是 0x206，电压命令位于 0x1FF 的 ID2 槽位，
+     * 即字节 2..3。 */
     frame = find_frame(0x1FFU);
     assert(frame != 0);
     assert((frame->data[2] == 0x1FU) && (frame->data[3] == 0x40U));

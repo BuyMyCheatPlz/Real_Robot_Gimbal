@@ -582,8 +582,8 @@ HAL_StatusTypeDef CanMotorBus_UpdateSelected(float dt_s,
         reset_yaw_control();
         dm4310_id1 = 0;
     }
-    /* Keep the PID loop fast, but publish the latest command at a fixed lower
-     * rate so CAN mailbox pressure does not become control noise. */
+    /* PID 环保持高速运行，但按较低的固定周期发布最新命令，
+     * 避免 CAN 邮箱压力变成控制噪声。 */
     if (command_send_due(now_ms) == 0U) return HAL_OK;
     return guarded_send_commands(m3508_id2, m3508_id3, gm6020_id2,
                                  m2006_id5, dm4310_id1);

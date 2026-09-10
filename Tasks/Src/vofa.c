@@ -20,7 +20,6 @@
 static UART_HandleTypeDef *vofa_uart;
 static uint8_t rx_dma_buffer[VOFA_RX_DMA_LENGTH];
 static char assembling_command[VOFA_COMMAND_MAX_LENGTH];
-//
 static volatile uint16_t assembling_length;
 static char completed_command[VOFA_COMMAND_QUEUE_DEPTH][VOFA_COMMAND_MAX_LENGTH];
 static volatile uint8_t command_read_index;

@@ -16,7 +16,7 @@ static inline void AttitudeMath_AccelToRollPitch(float ax, float ay, float az,
     *pitch_rad = atan2f(-ax, sqrtf(ay * ay + az * az));
 }
 
-/* 返回 target 相对 current 的最短有符号角差，范围 [-pi, pi)。 */
+/* 返回目标角相对当前角的最短有符号角差，范围 [-pi, pi)。 */
 static inline float AttitudeMath_AngleDifference(float target, float current)
 {
     float difference = target - current;
