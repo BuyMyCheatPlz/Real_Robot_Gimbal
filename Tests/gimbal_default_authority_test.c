@@ -18,8 +18,6 @@ int main(void)
     int expected_pitch_command;
     int16_t pitch_command;
     int16_t yaw_command;
-    float ff_at_low_pitch_roll;
-    float ff_at_raised_pitch_roll;
 
     GM6020_Init(&pitch, 2U, PITCH_SPEED_KP, PITCH_SPEED_KI);
     MotorSpeedPid_SetGains(&pitch.speed_pid, PITCH_SPEED_KP,
@@ -43,8 +41,7 @@ int main(void)
             -(int)PITCH_STARTUP_MIN_VOLTAGE;
     /* 主机编译器与目标 FPU 的浮点评估顺序略有差异，转成 int16 时可能相差 1 个 LSB。 */
     assert(abs((int)pitch_command - expected_pitch_command) <= 1);
-    assert(PITCH_GRAVITY_FF_MAX_VOLTAGE == 6500.0f);
-    assert(PITCH_GRAVITY_ONLY_ENABLE == 1U);
+    assert(PITCH_GRAVITY_ONLY_ENABLE == 0U);
     assert((PITCH_GRAVITY_ROLL_LPF_ALPHA > 0.0f) &&
            (PITCH_GRAVITY_ROLL_LPF_ALPHA <= 1.0f));
     assert(PITCH_SPEED_LPF_ALPHA == 1.0f);
@@ -52,33 +49,31 @@ int main(void)
            (PITCH_ROLL_RATE_TO_SPEED_SIGN == -1.0f));
     assert(PITCH_ROLL_RATE_TO_SPEED_SIGN ==
            (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN));
-    assert(fabsf(PITCH_GRAVITY_ZERO_RAD) < 0.001f);
+    assert(PITCH_GRAVITY_FIT_MIN_DEG == -44.0f);
+    assert(PITCH_GRAVITY_FIT_MAX_DEG == 25.0f);
+    assert(PITCH_GRAVITY_POLY_C0 == 1678.105241f);
+    assert(PITCH_GRAVITY_C1_GR == 161.466898f);
+    assert(PITCH_GRAVITY_POLY_C2 == -0.590091f);
+    assert(PITCH_GRAVITY_POLY_C3 == 0.006451f);
+    assert(PITCH_GRAVITY_POLY_C4 == 0.0f);
     assert(IMU_GYRO_ROLL_AXIS == 0U);
     assert(IMU_GYRO_ROLL_SIGN == 1.0f);
     assert(IMU_GYRO_PITCH_AXIS == 2U);
     assert(IMU_GYRO_YAW_AXIS == 1U);
-    /* 重力前馈为 K*sin(Pitch)，最终电机命令为 PID-ff。
-     * 驱动层会加上前馈项，因此这里传入 -ff。 */
-    ff_at_low_pitch_roll = PITCH_GRAVITY_SIGN *
-        sinf(-29.769482f * TASK_DEG_TO_RAD);
-    ff_at_raised_pitch_roll = PITCH_GRAVITY_SIGN *
-        sinf(177.896378f * TASK_DEG_TO_RAD);
-    assert(PITCH_GRAVITY_SIGN == -1.0f);
-    assert(-ff_at_low_pitch_roll < 0.0f);
-    assert(-ff_at_raised_pitch_roll > 0.0f);
-    assert(PITCH_ANGLE_KP_RPM_PER_RAD == 4.0f);
-    assert(PITCH_ANGLE_KI_RPM_PER_RAD_S == 0.0f);
-    assert(PITCH_ANGLE_KD_RPM_S_PER_RAD == 0.0f);
+    assert(PITCH_ANGLE_KP_RPM_PER_RAD == 23.4f);
+    assert(PITCH_ANGLE_KI_RPM_PER_RAD_S == 37.36f);
+    assert(PITCH_ANGLE_KD_RPM_S_PER_RAD == 100.0f);
     assert(PITCH_MAX_SPEED_RPM == 70.0f);
     assert(PITCH_SPEED_KP == 194.44f);
-    assert(PITCH_SPEED_KI == 0.0f);
-    assert(PITCH_SPEED_KD == 60.85f);
+    assert(PITCH_SPEED_KI == 8.0f);
+    assert(PITCH_SPEED_KD == 0.0f);
     assert(PITCH_STARTUP_SPEED_THRESHOLD_RPM == 1.0f);
     assert(PITCH_STARTUP_MIN_VOLTAGE >= 0.0f);
-    assert(PITCH_TRAJECTORY_MAX_SPEED_RAD_S <=
-           PITCH_MAX_SPEED_RPM * TASK_DEG_TO_RAD);
-    assert(PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2 <= 10.0f);
-    assert(PITCH_ACCEL_FF_VOLTAGE_PER_RAD_S2 == 0.0f);
+    assert((PITCH_SPEED_LIMIT_ENABLE == 0U) ||
+           (PITCH_TRAJECTORY_MAX_SPEED_RAD_S <=
+            PITCH_MAX_SPEED_RPM * TASK_DEG_TO_RAD));
+    assert((PITCH_SPEED_LIMIT_ENABLE == 0U) ||
+           (PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2 <= 10.0f));
 
     /* GM6020 的最终限幅包含前馈。前馈已经占满正向余量时，速度积分器
      * 不得继续正向累积，但必须保留反向制动能力。 */

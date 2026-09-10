@@ -27,10 +27,12 @@
   位置环输出 0 并复位位置 PID，靠重力前馈+速度环稳住，防止齿距背隙在目标附近高频抖动。
 - Pitch 目标直接钳位到实测机械限位（`PITCH_LIMIT_MIN_RAD`/`PITCH_LIMIT_MAX_RAD`，
   IMU Pitch -139°（最高）~-64°（最低）），不靠卡限位检测。
+- `PITCH_SPEED_LIMIT_ENABLE=0` 时直接跟踪阶跃目标，不限制轨迹速度/加速度和位置环
+  速度目标；设为 1 时才使用 `PITCH_MAX_SPEED_RPM` 与 `PITCH_TRAJECTORY_*`。
 - Pitch 速度环反馈使用映射到 `roll_rate_rad_s` 的 BMI088 角速度（rad/s→deg/s），
   直接测云台真实角速度，不受减速/背隙/柔性影响。最新三轴诊断确认本机 Pitch
   主轴是 raw X，且与编码器实际角同向。
-- 正常运行时用连续的 Pitch 编码器角计算正弦重力电压前馈，避免 IMU 融合角和低通
+- 正常运行时用连续的 Pitch 编码器角计算 3 阶标定重力电压前馈，避免 IMU 融合角和低通
   滤波在阶跃中滞后（符号/幅值由 `PITCH_GRAVITY_*` 宏配置）。
 - IMU Yaw 归一化为 `[-180°, +180°)`；DM4310 编码器 yaw 保持连续展开，
   因而控制过编码器零点时不会跳变。
@@ -147,7 +149,7 @@ UART4 命令接收保持开启（无换行时按接收空闲自动结束一条�
 - `PITCH_KP_SPD` / `PITCH_KI_SPD` / `PITCH_KD_SPD`：Pitch 速度环
 - `YAW_KP_POS` / `YAW_KI_POS` / `YAW_KD_POS`：Yaw 位置环
 - `YAW_KP_SPD` / `YAW_KI_SPD` / `YAW_KD_SPD`：Yaw 速度环
-- `PITCH_GRAVITY_FF`（别名 `PITCH_GRAVITY_FF_MAX_VOLTAGE`）：Pitch 重力前馈电压幅值
+- `C1_GR` / `PITCH_GRAVITY_C1_GR`：Pitch 重力前馈一次项系数
 
 **调试命令**
 
@@ -156,7 +158,7 @@ UART4 命令接收保持开启（无换行时按接收空闲自动结束一条�
 - `identify_on`：仅 `YAW_SYSID_MODE=1` 时有效，触发一次 yaw 线性扫频正弦辨识。
 
 每条调参命令只修改指定轴、指定环路。旧的无轴名命令（例如 `KP_POS=...`）会被拒绝。
-在线命令只修改运行时 PID，`config.h` 中的宏仍作为下次复位后的初始值。
+在线命令只修改运行时 PID 或 `C1_gr`，`config.h` 中的宏仍作为下次复位后的初始值。
 
 ## 调试/操作宏
 
@@ -171,14 +173,17 @@ UART4 命令接收保持开启（无换行时按接收空闲自动结束一条�
 | `YAW_CLOSED_LOOP_ENABLE` | 0/1 | 0=Yaw 开环（配合 `YAWTEST` 方向测试）；1=Yaw 位置闭环 |
 | `YAW_HOME_TO_IMU_ZERO_ON_AUTHORIZE` | 0/1 | 0=授权时保持当前 Yaw；1=授权/遥控重连时自动回 BMI Yaw 零点 |
 | `PITCH_HOME_TO_POWER_ON_POSITION` | 0/1 | 0=Pitch 授权时回 IMU 水平零点；1=以上电位置为零点并保持当前位置 |
+| `PITCH_SPEED_LIMIT_ENABLE` | 0/1 | 0=放开 Pitch 轨迹速度/加速度和位置环速度目标限幅；1=使用 `PITCH_MAX_SPEED_RPM` 和 `PITCH_TRAJECTORY_*` |
 
 Yaw 系统辨识参数：`YAW_SYSID_AMPLITUDE_CURRENT`（扫频幅值）、
 `YAW_SYSID_FREQ_START_HZ`、`YAW_SYSID_FREQ_END_HZ`、`YAW_SYSID_DURATION_MS`（单次时长）。
 
-Pitch 重力前馈参数：`PITCH_GRAVITY_FF_MAX_VOLTAGE`（电压幅值，运行时可由
-`PITCH_GRAVITY_FF` 命令覆盖）、`PITCH_GRAVITY_ZERO_RAD`（前馈过零角）、
-`PITCH_GRAVITY_SIGN`（符号，方向反了会往下掉或上顶，取反即可）。标定时观察
-VOFA I6/I7：松手下坠说明幅值偏小，主动上顶说明幅值偏大。
+Pitch 重力前馈参数：`PITCH_GRAVITY_FIT_MIN_DEG`、`PITCH_GRAVITY_FIT_MAX_DEG`、
+`PITCH_GRAVITY_POLY_C0`、`PITCH_GRAVITY_C1_GR`、`PITCH_GRAVITY_POLY_C2`、
+`PITCH_GRAVITY_POLY_C3`、`PITCH_GRAVITY_POLY_C4`。
+`PITCH_GRAVITY_C1_GR` 是上电默认值，运行时可在 Watch 里修改全局变量 `C1_gr`，
+也可用在线命令 `C1_GR=数值` 修改。
+标定区间外按端点值补偿，不做多项式外推。
 
 Pitch 机械限位：`PITCH_LIMIT_MIN_RAD`（最高，IMU -139°）、
 `PITCH_LIMIT_MAX_RAD`（最低，IMU -64°），目标直接钳位到该区间。

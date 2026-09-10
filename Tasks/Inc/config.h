@@ -55,13 +55,12 @@
 #define IMU_ACCEL_X_SIGN                  1.0f
 #define IMU_ACCEL_Y_SIGN                  1.0f
 #define IMU_ACCEL_Z_SIGN                  1.0f
-#define IMU_GYRO_ROLL_AXIS                2U
-/* 实测：X 轴(0)显示为 pitch 且向下为正，Y 轴(1)为 yaw，因此：
- * pitch=X(0)、yaw=Y(1)、roll=Z(2)。
- * 符号：pitch 用 X 轴(向下为正)；roll 用 Z 轴，取反使其与加速度计(右倾为正)一致。 */
-#define IMU_GYRO_PITCH_AXIS               0U
+#define IMU_GYRO_ROLL_AXIS                0U
+/* 控制链路沿用 roll_rate_rad_s 作为本机 Pitch 速度反馈，因此 roll 必须映射
+ * 到实测 Pitch 主轴 raw X；pitch_rate_rad_s 保留 raw Z 用于姿态诊断。 */
+#define IMU_GYRO_PITCH_AXIS               2U
 #define IMU_GYRO_YAW_AXIS                 1U
-#define IMU_GYRO_ROLL_SIGN               -1.0f
+#define IMU_GYRO_ROLL_SIGN                1.0f
 #define IMU_GYRO_PITCH_SIGN               1.0f
 #define IMU_GYRO_YAW_SIGN                 1.0f
 #define ATTITUDE_ACCEL_WEIGHT             0.010f
@@ -112,24 +111,27 @@
 #define PITCH_GM6020_CAN_ID                2U
 /* 重力前馈标定开关：1=仅输出重力前馈，Pitch 位置/速度闭环旁路、速度目标清零；
  * 标定完成后必须改回 0，仅前馈无法可靠保持全角度。 */
-#define PITCH_GRAVITY_ONLY_ENABLE         0U
+#define PITCH_GRAVITY_ONLY_ENABLE         1U
 /* 新云台首次回零采用保守的外环：上电实测约 37° 偏差时，旧 800/90 组合
  * 会立即以最大速度贯穿整个行程。确认方向和阻尼后再逐步增加。 */
 /* 宏名为历史遗留；Pitch 双环内部使用位置 °、速度 °/s。 */
-#define PITCH_ANGLE_KP_RPM_PER_RAD          75.0f
-#define PITCH_ANGLE_KI_RPM_PER_RAD_S        0.0f
+#define PITCH_ANGLE_KP_RPM_PER_RAD          23.4f
+#define PITCH_ANGLE_KI_RPM_PER_RAD_S        37.36f
 /* Pitch 主要阻尼来自内层陀螺速度环；外环 D 只作为轨迹跟踪阻尼微调。 */
 #define PITCH_ANGLE_KD_RPM_S_PER_RAD       100.0f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
+/* Pitch 限速总开关：0=不限制轨迹速度/加速度，也不限制位置环速度目标；
+ * 1=使用 PITCH_MAX_SPEED_RPM 和 PITCH_TRAJECTORY_* 做保守阶跃。 */
+#define PITCH_SPEED_LIMIT_ENABLE           0U
 #define PITCH_MAX_SPEED_RPM                70.0f
 #define PITCH_SPEED_KP                    194.44f
-#define PITCH_SPEED_KI                      0.0f
+#define PITCH_SPEED_KI                      8.0f
 /* Pitch 速度环 D 项是“每 1 ms 拍的误差差量”：
  * kd*(e[k]-e[k-1])（不除以 dt）。切勿把它当“每秒导数/除以 dt”的增益：
  * dt=1 ms 时同数值会被放大约 1000 倍，一加 D 就满幅抖振。 */
-#define PITCH_SPEED_KD                     60.85f
+#define PITCH_SPEED_KD                      0.0f
 #define PITCH_SPEED_INTEGRAL_LIMIT          3000.0f
-#define PITCH_SPEED_OUTPUT_LIMIT           25000.0f
+#define PITCH_SPEED_OUTPUT_LIMIT           30000.0f
 /* 速度环积分分离(误差超过该值停止积分)。原 70 几乎等于全带积分，
  * 低频相位滞后大、外环 KP 一高就易起振。先收窄到 5，
  * 若积分抗静摩擦不足可再放回 10~20。 */
@@ -158,13 +160,16 @@
 #define PITCH_HOME_STABLE_TIME_MS          200U    /* 回零到位：水平死区内稳定此时长判定到达 */
 /* 0：Pitch 上电授权后以 IMU 水平为零点，自动回到水平；
  * 1：Pitch 上电授权后以当前上电位置为零点，当前位置保持不动。 */
-#define PITCH_HOME_TO_POWER_ON_POSITION     0U
-/* 按本机 Pitch 坐标的有符号正弦前馈。驱动层将前馈加到速度环输出，因此
- * 调用处会取负，实现“速度环输出 - 前馈”的合成方式。仅前馈标定时从较小值开始，
- * 用 VOFA 在线命令 PITCH_GRAVITY_FF=数值逐步调到松手不下坠也不上顶。 */
-#define PITCH_GRAVITY_FF_MAX_VOLTAGE         13519.0f
-#define PITCH_GRAVITY_ZERO_RAD             0.0f       /* Pitch=0°：前馈过零 */
-#define PITCH_GRAVITY_SIGN                -1.0f
+#define PITCH_HOME_TO_POWER_ON_POSITION     1U
+/* Pitch 重力前馈 3 阶标定曲线，输出直接作为 GM6020 电压前馈。
+ * PITCH_GRAVITY_C1_GR 是 C1_gr 的上电默认值，运行时可在 Watch 里改 C1_gr。 */
+#define PITCH_GRAVITY_FIT_MIN_DEG          (-44.0f)
+#define PITCH_GRAVITY_FIT_MAX_DEG            25.0f
+#define PITCH_GRAVITY_POLY_C0             1678.105241f
+#define PITCH_GRAVITY_C1_GR                161.466898f
+#define PITCH_GRAVITY_POLY_C2             (-0.590091f)
+#define PITCH_GRAVITY_POLY_C3               0.006451f
+#define PITCH_GRAVITY_POLY_C4               0.0f
 #define PITCH_MOTOR_SIGN                  1.0f
 /* 编码器展开角度与 IMU Pitch 的增量方向。CSV 表明 I1 与 I11 反向：
  * I11=-64° 为最低、-139° 为最高，因此该符号必须为 -1。 */
@@ -173,13 +178,9 @@
 /* 收到 Yaw 遥控步进后短暂锁存 Pitch，防止 Yaw→Roll 串扰进入 Pitch 速度环。 */
 #define PITCH_LATCH_AFTER_YAW_CMD_MS       500U
 #define PITCH_LATCH_YAW_SETTLED_DEG        0.5f
-/* Pitch 有限加速度轨迹：默认是安全整定基线；速度内环确认可控后再在线提速。 */
+/* Pitch 有限加速度轨迹：仅在 PITCH_SPEED_LIMIT_ENABLE=1 时生效。 */
 #define PITCH_TRAJECTORY_MAX_SPEED_RAD_S   1.2f
 #define PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2  8.0f
-#define PITCH_TRAJ_VEL_FF_GAIN             1.0f
-/* 大负载惯量前馈。先保持 0；速度内环与重力前馈调好后，按阶跃加/减速段
- * 对称增加。单位：GM6020 电压指令 / (rad/s^2)。 */
-#define PITCH_ACCEL_FF_VOLTAGE_PER_RAD_S2  0.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
  * 30° 阶跃(≤200ms、超调≤0.2°)整定组。依据辨识：电流→速度≈积分器(自由轴)，
@@ -238,10 +239,10 @@
 #define LAUNCH_M3508_ID2_DIRECTION        1.0f
 
 /* ---------------- 发射 M3508 ID3 速度环 PID ---------------- */
-#define LAUNCH_M3508_ID3_SPEED_KP         2.0f
-#define LAUNCH_M3508_ID3_SPEED_KI         0.5f
+#define LAUNCH_M3508_ID3_SPEED_KP         90.0f
+#define LAUNCH_M3508_ID3_SPEED_KI         1.0f
 #define LAUNCH_M3508_ID3_SPEED_KD         0.0f
-#define LAUNCH_M3508_ID3_INTEGRAL_LIMIT   16384.0f
+#define LAUNCH_M3508_ID3_INTEGRAL_LIMIT   16384.0f  
 #define LAUNCH_M3508_ID3_OUTPUT_LIMIT     16384.0f
 #define LAUNCH_M3508_ID3_INTEGRAL_SEPARATION_RPM 1000.0f
 #define LAUNCH_M3508_ID3_SPEED_LPF_ALPHA  0.20f
@@ -250,10 +251,10 @@
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
  * 电机轴转速环。输出限幅放满 10A：推弹瞬间负载大，8A 不够顶会掉速。
  * 之前 KP=10/KI=2 偏保守导致"实际比目标少 1~2 颗"(连发稳态掉速+起步滞后)，
- * 这里把 KP 提到 12、KI 提到 3、积分限幅 2000→3000，让速度环更跟手、稳态误差更小。
+ * 这里把 KP 提到 100、KI 提到 4、积分限幅 2000→3000，让速度环更跟手、稳态误差更小。
  * 注意别再加太多，否则弹丸顶开后积分+饱和 P 会把电机猛冲过 4800 撞下一颗弹。 */
-#define LAUNCH_M2006_ID5_SPEED_KP         12.0f
-#define LAUNCH_M2006_ID5_SPEED_KI         3.0f
+#define LAUNCH_M2006_ID5_SPEED_KP         100.0f
+#define LAUNCH_M2006_ID5_SPEED_KI         4.0f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   3000.0f
 #define LAUNCH_M2006_ID5_OUTPUT_LIMIT     10000.0f
@@ -274,8 +275,8 @@
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
 #define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 60.0f
-#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 40.0f  /* 输出°→电机rpm：10°误差→400rpm */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   1000.0f /* 单动接近速度：250 太慢(约1s/发)，提到 1000(约0.3s/发) */
+#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 120.0f  /* 输出°→电机rpm：40°误差→4800rpm */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   4800.0f /* 单动接近速度：与连发同速，40°理论约50ms */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5000.0f /* 连发档限速：需追 4800rpm 目标 */
 #define LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS   50U        /* 连发档步进周期 = 20Hz */
 #define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    1.5f  /* 到位死区：4°太大每发都短2~3°，累积成"少1~2颗"；收到1.5°让拨盘转到位 */

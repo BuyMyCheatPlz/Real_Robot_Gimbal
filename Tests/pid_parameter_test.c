@@ -34,12 +34,13 @@ int main(void)
         assert(fabsf(update.value - (float)(index + 1U)) < 0.0001f);
     }
 
-    assert(PidParameter_Parse("PITCH_GRAVITY_FF=1500", &update) != 0U);
-    assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
-    assert(fabsf(update.value - 1500.0f) < 0.0001f);
-    assert(PidParameter_Parse("PITCH_GRAVITY_FF=30000", &update) != 0U);
-    assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
-    assert(fabsf(update.value - 30000.0f) < 0.0001f);
+    assert(PidParameter_Parse("C1_GR=161.466898", &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_GRAVITY_C1);
+    assert(fabsf(update.value - 161.466898f) < 0.0001f);
+    assert(PidParameter_Parse("PITCH_GRAVITY_C1_GR=206.454777",
+                             &update) != 0U);
+    assert(update.id == PID_PARAM_PITCH_GRAVITY_C1);
+    assert(fabsf(update.value - 206.454777f) < 0.0001f);
 
     assert(PidParameter_Parse("PITCH_TRAJ_SPEED=1.2", &update) != 0U);
     assert(update.id == PID_PARAM_PITCH_TRAJ_SPEED);
@@ -47,18 +48,14 @@ int main(void)
     assert(update.id == PID_PARAM_PITCH_TRAJ_ACCEL);
     assert(PidParameter_Parse("PITCH_MAX_SPEED=70", &update) != 0U);
     assert(update.id == PID_PARAM_PITCH_MAX_SPEED);
-    assert(PidParameter_Parse("PITCH_VEL_FF=1", &update) != 0U);
-    assert(update.id == PID_PARAM_PITCH_VEL_FF);
-    assert(PidParameter_Parse("PITCH_ACCEL_FF=0", &update) != 0U);
-    assert(update.id == PID_PARAM_PITCH_ACCEL_FF);
-    assert(PidParameter_Parse("PITCH_GRAVITY_FF_MAX_VOLTAGE=30000",
-                             &update) != 0U);
-    assert(update.id == PID_PARAM_PITCH_GRAVITY_FF);
-    assert(fabsf(update.value - 30000.0f) < 0.0001f);
-
     /* 拒绝含义不明确的旧命令，避免同时修改两个轴。 */
     assert(PidParameter_Parse("KP_POS=1", &update) == 0U);
     assert(PidParameter_Parse("KP_SPD=1", &update) == 0U);
+    assert(PidParameter_Parse("PITCH_GRAVITY_FF=1500", &update) == 0U);
+    assert(PidParameter_Parse("PITCH_GRAVITY_FF_MAX_VOLTAGE=30000",
+                             &update) == 0U);
+    assert(PidParameter_Parse("PITCH_VEL_FF=1", &update) == 0U);
+    assert(PidParameter_Parse("PITCH_ACCEL_FF=0", &update) == 0U);
     assert(PidParameter_Parse("YAW_KP_SPD=-1", &update) == 0U);
     assert(PidParameter_Parse("YAW_KP_SPD=nan", &update) == 0U);
     assert(PidParameter_Parse("YAW_KP_SPD=2junk", &update) == 0U);

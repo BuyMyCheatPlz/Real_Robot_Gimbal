@@ -38,6 +38,7 @@ typedef struct
 } PositionPid_t;
 
 volatile GimbalControlState_t gimbal_control_state;
+volatile float C1_gr = PITCH_GRAVITY_C1_GR;
 static volatile int16_t yaw_test_request_current;
 static volatile uint32_t yaw_test_request_ms;
 
@@ -204,11 +205,25 @@ static float signf(float value)
     return 0.0f;
 }
 
-static float pitch_gravity_feedforward_scale(float pitch_rad)
+static float pitch_gravity_comp(float angle_rad)
 {
-    /* 本机 Pitch 坐标的正弦前馈：Pitch=0° 为参考零点。 */
-    return PITCH_GRAVITY_SIGN *
-           sinf(pitch_rad - PITCH_GRAVITY_ZERO_RAD);
+    float angle_deg = angle_rad * RAD_TO_DEG;
+    float comp;
+
+    /* 标定范围软钳位：超出标定区间不外推，按端点值补偿。 */
+    if (angle_deg < PITCH_GRAVITY_FIT_MIN_DEG)
+        angle_deg = PITCH_GRAVITY_FIT_MIN_DEG;
+    if (angle_deg > PITCH_GRAVITY_FIT_MAX_DEG)
+        angle_deg = PITCH_GRAVITY_FIT_MAX_DEG;
+
+    /* 自变量为实测绝对角原值，0 基准，与拟合 x 同域。 */
+    comp = PITCH_GRAVITY_POLY_C0 + angle_deg *
+        (C1_gr + angle_deg *
+         (PITCH_GRAVITY_POLY_C2 + angle_deg *
+          (PITCH_GRAVITY_POLY_C3 + angle_deg *
+           PITCH_GRAVITY_POLY_C4)));
+
+    return comp;
 }
 
 /* 有限加速度轨迹同时提供速度和加速度参考，避免对不连续的位置阶跃求导。 */
@@ -264,7 +279,8 @@ void PID_calc(void *argument)
         PITCH_ANGLE_KP_RPM_PER_RAD, PITCH_ANGLE_KI_RPM_PER_RAD_S,
         PITCH_ANGLE_KD_RPM_S_PER_RAD, 0.0f, PITCH_ANGLE_INTEGRAL_LIMIT_RPM,
         PITCH_ANGLE_INTEGRAL_SEPARATION_RAD * RAD_TO_DEG,
-        PITCH_MAX_SPEED_RPM, 0.0f, 0U
+        (PITCH_SPEED_LIMIT_ENABLE != 0U) ? PITCH_MAX_SPEED_RPM :
+        ONLINE_PID_VALUE_MAX, 0.0f, 0U
     };
     PositionPid_t yaw_angle_pid = {
         YAW_ANGLE_KP_RAD_S_PER_RAD, YAW_ANGLE_KI_RAD_S_PER_RAD_S,
@@ -300,18 +316,17 @@ void PID_calc(void *argument)
     float yaw_profile_speed = 0.0f;
     float yaw_profile_acceleration = 0.0f;
     float pitch_home = 0.0f;
-    /* Pitch 阶跃轨迹状态(仿 yaw)：位置环跟踪有限加速度轨迹实现 30°/≤200ms/≤0.2° */
+    /* Pitch 阶跃轨迹状态：仅在限速开关打开时用于约束目标变化速度。 */
     float pitch_profile_target = 0.0f;
     float pitch_profile_speed = 0.0f;
     float pitch_profile_acceleration = 0.0f;
-    float pitch_gravity_ff_voltage = PITCH_GRAVITY_FF_MAX_VOLTAGE;
     float pitch_gravity_angle_offset = 0.0f;
     float pitch_trajectory_max_speed = PITCH_TRAJECTORY_MAX_SPEED_RAD_S;
     float pitch_trajectory_max_accel = PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2;
     float pitch_max_speed_deg_s = PITCH_MAX_SPEED_RPM;
-    float pitch_velocity_ff_gain = PITCH_TRAJ_VEL_FF_GAIN;
-    float pitch_accel_ff_gain = PITCH_ACCEL_FF_VOLTAGE_PER_RAD_S2;
-    float pitch_acceleration_ff = 0.0f;
+    float pitch_speed_kp = PITCH_SPEED_KP;
+    float pitch_speed_ki = PITCH_SPEED_KI;
+    float pitch_speed_kd = PITCH_SPEED_KD;
     float pitch_motor_feedforward = 0.0f;
     float yaw_home = 0.0f;
     float imu_roll = 0.0f;
@@ -395,13 +410,16 @@ void PID_calc(void *argument)
                     pitch_angle_pid.kd = parameter_update.value;
                     break;
                 case PID_PARAM_PITCH_KP_SPD:
-                    can1_gm6020_id2.speed_pid.kp = parameter_update.value;
+                    pitch_speed_kp = parameter_update.value;
+                    can1_gm6020_id2.speed_pid.kp = pitch_speed_kp;
                     break;
                 case PID_PARAM_PITCH_KI_SPD:
-                    can1_gm6020_id2.speed_pid.ki = parameter_update.value;
+                    pitch_speed_ki = parameter_update.value;
+                    can1_gm6020_id2.speed_pid.ki = pitch_speed_ki;
                     break;
                 case PID_PARAM_PITCH_KD_SPD:
-                    can1_gm6020_id2.speed_pid.kd = parameter_update.value;
+                    pitch_speed_kd = parameter_update.value;
+                    can1_gm6020_id2.speed_pid.kd = pitch_speed_kd;
                     break;
                 case PID_PARAM_YAW_KP_POS:
                     yaw_angle_pid.kp = parameter_update.value;
@@ -421,10 +439,8 @@ void PID_calc(void *argument)
                 case PID_PARAM_YAW_KD_SPD:
                     can2_dm4310_id1.speed_pid.kd = parameter_update.value;
                     break;
-                case PID_PARAM_PITCH_GRAVITY_FF:
-                    pitch_gravity_ff_voltage = parameter_update.value;
-                    if (pitch_gravity_ff_voltage > GM6020_VOLTAGE_LIMIT)
-                        pitch_gravity_ff_voltage = GM6020_VOLTAGE_LIMIT;
+                case PID_PARAM_PITCH_GRAVITY_C1:
+                    C1_gr = parameter_update.value;
                     break;
                 case PID_PARAM_PITCH_TRAJ_SPEED:
                     if (parameter_update.value > 0.0f)
@@ -436,13 +452,12 @@ void PID_calc(void *argument)
                     break;
                 case PID_PARAM_PITCH_MAX_SPEED:
                     if (parameter_update.value > 0.0f)
+                    {
                         pitch_max_speed_deg_s = parameter_update.value;
-                    break;
-                case PID_PARAM_PITCH_VEL_FF:
-                    pitch_velocity_ff_gain = parameter_update.value;
-                    break;
-                case PID_PARAM_PITCH_ACCEL_FF:
-                    pitch_accel_ff_gain = parameter_update.value;
+                        if (PITCH_SPEED_LIMIT_ENABLE != 0U)
+                            pitch_angle_pid.output_limit =
+                                pitch_max_speed_deg_s;
+                    }
                     break;
                 default:
                     break;
@@ -907,48 +922,58 @@ void PID_calc(void *argument)
                         {
                             reset_position_pid(&pitch_angle_pid);
                             MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
+                            MotorSpeedPid_SetGains(
+                                &can1_gm6020_id2.speed_pid,
+                                0.0f, 0.0f, 0.0f);
                             pitch_speed_target_rpm = 0.0f;
                             pitch_profile_speed = 0.0f;
                             pitch_profile_acceleration = 0.0f;
                         }
                         else
                         {
-                            /* 有限加速度轨迹 + 速度前馈(仿 yaw)：位置环跟踪轨迹而非
-                             * 直接阶跃，保证 30° 阶跃 ≤200ms 且超调 ≤0.2°。 */
-                            yaw_trajectory_step(&pitch_profile_target,
-                                                &pitch_profile_speed,
-                                                &pitch_profile_acceleration,
-                                                pitch_target,
-                                                fminf(
-                                                    pitch_trajectory_max_speed,
-                                                    pitch_max_speed_deg_s *
-                                                    TASK_DEG_TO_RAD),
-                                                pitch_trajectory_max_accel,
-                                                control_dt_s);
+                            MotorSpeedPid_SetGains(
+                                &can1_gm6020_id2.speed_pid,
+                                pitch_speed_kp, pitch_speed_ki,
+                                pitch_speed_kd);
+                            if (PITCH_SPEED_LIMIT_ENABLE != 0U)
+                            {
+                                /* 有限加速度轨迹：位置环跟踪轨迹而非直接阶跃，
+                                 * 用于保守限制 Pitch 阶跃速度和超调。 */
+                                yaw_trajectory_step(
+                                    &pitch_profile_target,
+                                    &pitch_profile_speed,
+                                    &pitch_profile_acceleration,
+                                    pitch_target,
+                                    fminf(
+                                        pitch_trajectory_max_speed,
+                                        pitch_max_speed_deg_s *
+                                        TASK_DEG_TO_RAD),
+                                    pitch_trajectory_max_accel,
+                                    control_dt_s);
+                            }
+                            else
+                            {
+                                pitch_profile_target = pitch_target;
+                                pitch_profile_speed = 0.0f;
+                                pitch_profile_acceleration = 0.0f;
+                            }
                             pitch_speed_target_rpm =
                                 position_pid(&pitch_angle_pid,
                                              pitch_profile_target * RAD_TO_DEG,
                                              pitch_angle_actual * RAD_TO_DEG,
-                                             control_dt_s) +
-                                pitch_velocity_ff_gain *
-                                pitch_profile_speed * RAD_TO_DEG;
-                            pitch_speed_target_rpm = clampf(
-                                pitch_speed_target_rpm,
-                                pitch_max_speed_deg_s);
+                                             control_dt_s);
+                            if (PITCH_SPEED_LIMIT_ENABLE != 0U)
+                            {
+                                pitch_speed_target_rpm = clampf(
+                                    pitch_speed_target_rpm,
+                                    pitch_max_speed_deg_s);
+                            }
                         }
-                        /* 本工程采用“速度环输出 - 重力前馈”的合成方式；驱动固定做
-                         * PID + 前馈，故这里传入 -ff。使用编码器 Pitch 角可避免 IMU 融合角和
-                         * 额外低通在阶跃中滞后，把重力补偿打到错误相位。 */
-                        gravity_feedforward = pitch_gravity_ff_voltage *
-                            pitch_gravity_feedforward_scale(
-                                pitch_angle_actual +
-                                pitch_gravity_angle_offset);
-                        pitch_acceleration_ff = pitch_accel_ff_gain *
-                            pitch_profile_acceleration;
-                        pitch_motor_feedforward =
-                            -PITCH_MOTOR_SIGN * gravity_feedforward +
-                            PITCH_CONTROL_TO_MOTOR_SIGN *
-                            pitch_acceleration_ff;
+                        /* 重力前馈为指令域多项式，驱动固定做 PID + 前馈。
+                         * 使用编码器 Pitch 角可避免 IMU 融合角和额外低通在阶跃中滞后。 */
+                        gravity_feedforward = pitch_gravity_comp(
+                            pitch_angle_actual + pitch_gravity_angle_offset);
+                        pitch_motor_feedforward = gravity_feedforward;
                         GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
                             pitch_motor_feedforward);
                         GM6020_SetSpeed(&can1_gm6020_id2,
@@ -1112,7 +1137,7 @@ void PID_calc(void *argument)
         }
 
         gimbal_control_state.pitch_gravity_ff_setting =
-            pitch_gravity_ff_voltage;
+            C1_gr;
         gimbal_control_state.pitch_target_rad = pitch_target;
         gimbal_control_state.yaw_target_rad = yaw_target;
         gimbal_control_state.pitch_encoder_rad = pitch_angle_actual;
