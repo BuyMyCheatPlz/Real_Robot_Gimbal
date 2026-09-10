@@ -115,22 +115,23 @@ JustFloat 通道，帧尾为 `00 00 80 7F`。
 | 7 | 当前映射后的 Pitch 角速度，°/s |
 | 8 | 当前映射后的 Yaw 角速度，°/s |
 
-`VOFA_IMU_AXIS_DEBUG_MODE=0` 且 `VOFA_PITCH_TUNING_MODE=1` 时，Pitch 调参/重力前馈
-标定通道含义为：
+`VOFA_IMU_AXIS_DEBUG_MODE=0` 且 `VOFA_PITCH_TUNING_MODE=0` 时，默认综合状态页通道
+含义为：
 
-| VOFA 通道 | Pitch 调参内容 |
+| VOFA 通道 | 默认综合状态内容 |
 |---|---|
 | 1 | Pitch 目标角，° |
 | 2 | Pitch 实际角，° |
-| 3 | Pitch 轨迹目标角，° |
-| 4 | Pitch 速度目标，°/s |
-| 5 | Pitch IMU 实际速度，°/s |
-| 6 | Pitch 速度 PID 输出 |
-| 7 | Pitch 电机坐标系总前馈 |
-| 8 | Pitch 最终 CAN 电压命令 |
+| 3 | Yaw 目标角，° |
+| 4 | Yaw 实际角，° |
+| 5 | M2006 目标输出角，°；连发模式下每 50 ms 按 40° 阶梯递增 |
+| 6 | M2006 实际输出角，°；允许非整数 |
+| 7 | M3508 ID2 实测转速，rpm |
+| 8 | M3508 ID3 实测转速，rpm |
 
-`VOFA_IMU_AXIS_DEBUG_MODE=0` 且 `VOFA_PITCH_TUNING_MODE=0` 时，通道 3~8 恢复综合状态页：
-Yaw 目标/实际角、M2006 目标/实际输出角、M3508 ID2/ID3 实测转速。
+`VOFA_IMU_AXIS_DEBUG_MODE=0` 且 `VOFA_PITCH_TUNING_MODE=1` 时，通道 3~8 改为
+Pitch 调参页：Pitch 轨迹角、速度目标、IMU 实际速度、速度 PID 输出、电机坐标系总前馈、
+最终 CAN 电压命令。
 
 `YAW_SYSID_MODE=1` 辨识固件时，通道 7/8 改为：7=给 DM4310 的电流指令、8=yaw 原始
 速度(rpm)，且仅在辨识运行期间打印，运行结束自动静默。

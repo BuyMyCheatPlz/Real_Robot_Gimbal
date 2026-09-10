@@ -48,10 +48,10 @@
 - 最近完整阶跃中，`0→-30°` 峰值约 `-43.8°`，`-30→0°` 峰值约 `+24.8°`；
   由位置差分得到的峰值速度约 `266/307°/s`，远高于当时 `90°/s` 的速度目标。
 - 因此先处理速度闭环、最终输出饱和和重力前馈，不用外环大 D 掩盖内环问题。
-- `VOFA_IMU_AXIS_DEBUG_MODE=1` 时 8 通道依次为：最终目标角、实际角、BMI088 原始
+- `VOFA_IMU_AXIS_DEBUG_MODE=1` 时 8 通道依次为：Pitch 目标角、Pitch 实际角、BMI088 原始
   X/Y/Z 角速度、当前映射后的 Roll/Pitch/Yaw 角速度。确认方向后把该宏改回 0，
-  `VOFA_PITCH_TUNING_MODE=1` 会恢复 Pitch 调参通道：轨迹角、速度目标、IMU 实际速度、
-  速度 PID 输出、总前馈、最终 CAN 输出。
+  `VOFA_PITCH_TUNING_MODE=0` 会恢复默认综合状态页：Pitch/Yaw 目标实际角、M2006
+  目标实际输出角、两颗 M3508 实际速度。
 - `PITCH_GRAVITY_ONLY_ENABLE=1` 用于单独标定重力前馈：Pitch 位置/速度闭环旁路、
   速度目标清零，只看 I6/I7 的前馈输出；标定完成后改回 0。
 - 若 +30° 方向实测到不了 ~30°（停在 ~26° 附近），优先检查该方向机械限位/线束干涉。
@@ -320,8 +320,8 @@ M2006 只有在线时才会运行。Launch 任务还会独立检查 100 ms 遥�
 ## 九、VOFA JustFloat 与在线调参
 
 UART4 每 10 ms 发送 8 个小端 float，随后发送帧尾 `00 00 80 7F`。当前默认
-`VOFA_PITCH_TUNING_MODE=1`，I0/I1 为 Pitch 目标/实际角，I2~I7 为 Pitch 轨迹、
-速度、PID、前馈和最终 CAN 输出。完整通道映射、命令清单和调试/操作宏见
+`VOFA_PITCH_TUNING_MODE=0`，I0/I1 为 Pitch 目标/实际角，I2/I3 为 Yaw 目标/实际角，
+I4/I5 为 M2006 目标/实际输出角，I6/I7 为两颗 M3508 实测转速。完整通道映射、命令清单和调试/操作宏见
 [Tasks/README.md](Tasks/README.md)。
 
 UART4 同时接收以回车或换行结尾的 ASCII 命令：

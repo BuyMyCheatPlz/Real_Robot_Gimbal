@@ -14,7 +14,7 @@
 #define LAUNCH_REMOTE_TIMEOUT_MS          100U
 #define LAUNCH_TASK_WAIT_MS               2U
 #define VOFA_PERIOD_MS                    10U
-#define VOFA_PITCH_TUNING_MODE              1U
+#define VOFA_PITCH_TUNING_MODE              0U
 /* 0：正常 Pitch 调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
 #define VOFA_IMU_AXIS_DEBUG_MODE            0U
 #define ONLINE_PID_VALUE_MAX              100000.0f

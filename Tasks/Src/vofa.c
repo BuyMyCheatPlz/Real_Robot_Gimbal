@@ -211,12 +211,13 @@ void VOFA_print(void *argument)
         channels[6] = snapshot.pitch_motor_feedforward;
         channels[7] = (float)snapshot.pitch_can_command;
 #else
+        /* 默认综合状态页：
+         * I2/I3=Yaw 目标/实际角；I4/I5=M2006 目标/实际输出角，连发时
+         * 目标每 50 ms 按 40° 阶梯递增；I6/I7=两颗 M3508 实测转速。 */
         channels[2] = snapshot.yaw_target_rad * 57.295779513082320876f;
         channels[3] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
-        /* M2006 拨盘：目标/实际输出角度曲线(°) */
         channels[4] = snapshot.m2006_target_deg;
         channels[5] = snapshot.m2006_actual_deg;
-        /* I6/I7 = 两个 M3508 摩擦轮电机实测转速(rpm) */
         channels[6] = snapshot.m3508_id2_speed_rpm;
         channels[7] = snapshot.m3508_id3_speed_rpm;
 #endif
