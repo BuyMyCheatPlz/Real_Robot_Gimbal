@@ -49,8 +49,8 @@ int main(void)
            (PITCH_ROLL_RATE_TO_SPEED_SIGN == -1.0f));
     assert(PITCH_ROLL_RATE_TO_SPEED_SIGN ==
            (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN));
-    assert(PITCH_GRAVITY_FIT_MIN_DEG == -44.0f);
-    assert(PITCH_GRAVITY_FIT_MAX_DEG == 25.0f);
+    assert(PITCH_GRAVITY_FIT_MIN_DEG == -49.0f);
+    assert(PITCH_GRAVITY_FIT_MAX_DEG == 49.0f);
     assert(PITCH_GRAVITY_POLY_C0 == 1678.105241f);
     assert(PITCH_GRAVITY_C1_GR == 161.466898f);
     assert(PITCH_GRAVITY_POLY_C2 == -0.590091f);

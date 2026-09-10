@@ -111,21 +111,21 @@
 #define PITCH_GM6020_CAN_ID                2U
 /* 重力前馈标定开关：1=仅输出重力前馈，Pitch 位置/速度闭环旁路、速度目标清零；
  * 标定完成后必须改回 0，仅前馈无法可靠保持全角度。 */
-#define PITCH_GRAVITY_ONLY_ENABLE         1U
+#define PITCH_GRAVITY_ONLY_ENABLE         0U
 /* 新云台首次回零采用保守的外环：上电实测约 37° 偏差时，旧 800/90 组合
  * 会立即以最大速度贯穿整个行程。确认方向和阻尼后再逐步增加。 */
 /* 宏名为历史遗留；Pitch 双环内部使用位置 °、速度 °/s。 */
-#define PITCH_ANGLE_KP_RPM_PER_RAD          23.4f
-#define PITCH_ANGLE_KI_RPM_PER_RAD_S        37.36f
+#define PITCH_ANGLE_KP_RPM_PER_RAD          35.7f
+#define PITCH_ANGLE_KI_RPM_PER_RAD_S        5.21f
 /* Pitch 主要阻尼来自内层陀螺速度环；外环 D 只作为轨迹跟踪阻尼微调。 */
-#define PITCH_ANGLE_KD_RPM_S_PER_RAD       100.0f
+#define PITCH_ANGLE_KD_RPM_S_PER_RAD       939.3f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
 /* Pitch 限速总开关：0=不限制轨迹速度/加速度，也不限制位置环速度目标；
  * 1=使用 PITCH_MAX_SPEED_RPM 和 PITCH_TRAJECTORY_* 做保守阶跃。 */
 #define PITCH_SPEED_LIMIT_ENABLE           0U
 #define PITCH_MAX_SPEED_RPM                70.0f
-#define PITCH_SPEED_KP                    194.44f
-#define PITCH_SPEED_KI                      8.0f
+#define PITCH_SPEED_KP                    172.6f
+#define PITCH_SPEED_KI                      12.0f
 /* Pitch 速度环 D 项是“每 1 ms 拍的误差差量”：
  * kd*(e[k]-e[k-1])（不除以 dt）。切勿把它当“每秒导数/除以 dt”的增益：
  * dt=1 ms 时同数值会被放大约 1000 倍，一加 D 就满幅抖振。 */
@@ -163,7 +163,7 @@
 #define PITCH_HOME_TO_POWER_ON_POSITION     1U
 /* Pitch 重力前馈 3 阶标定曲线，输出直接作为 GM6020 电压前馈。
  * PITCH_GRAVITY_C1_GR 是 C1_gr 的上电默认值，运行时可在 Watch 里改 C1_gr。 */
-#define PITCH_GRAVITY_FIT_MIN_DEG          (-44.0f)
+#define PITCH_GRAVITY_FIT_MIN_DEG          (-49.0f)
 #define PITCH_GRAVITY_FIT_MAX_DEG            25.0f
 #define PITCH_GRAVITY_POLY_C0             1678.105241f
 #define PITCH_GRAVITY_C1_GR                161.466898f
@@ -229,7 +229,7 @@
 #define YAW_SOFT_LIMIT_DEG                  0.0f
 
 /* ---------------- 发射 M3508 ID2 速度环 PID ---------------- */
-#define LAUNCH_M3508_ID2_SPEED_KP         2.0f
+#define LAUNCH_M3508_ID2_SPEED_KP         15.0f
 #define LAUNCH_M3508_ID2_SPEED_KI         0.5f
 #define LAUNCH_M3508_ID2_SPEED_KD         0.0f
 #define LAUNCH_M3508_ID2_INTEGRAL_LIMIT   16384.0f
@@ -239,8 +239,8 @@
 #define LAUNCH_M3508_ID2_DIRECTION        1.0f
 
 /* ---------------- 发射 M3508 ID3 速度环 PID ---------------- */
-#define LAUNCH_M3508_ID3_SPEED_KP         90.0f
-#define LAUNCH_M3508_ID3_SPEED_KI         1.0f
+#define LAUNCH_M3508_ID3_SPEED_KP         15.0f
+#define LAUNCH_M3508_ID3_SPEED_KI         0.5f
 #define LAUNCH_M3508_ID3_SPEED_KD         0.0f
 #define LAUNCH_M3508_ID3_INTEGRAL_LIMIT   16384.0f  
 #define LAUNCH_M3508_ID3_OUTPUT_LIMIT     16384.0f
