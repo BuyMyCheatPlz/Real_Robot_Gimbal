@@ -115,10 +115,11 @@
 /* 新云台首次回零采用保守的外环：上电实测约 37° 偏差时，旧 800/90 组合
  * 会立即以最大速度贯穿整个行程。确认方向和阻尼后再逐步增加。 */
 /* 宏名为历史遗留；Pitch 双环内部使用位置 °、速度 °/s。 */
-#define PITCH_ANGLE_KP_RPM_PER_RAD          35.7f
-#define PITCH_ANGLE_KI_RPM_PER_RAD_S        5.21f
-/* Pitch 主要阻尼来自内层陀螺速度环；外环 D 只作为轨迹跟踪阻尼微调。 */
-#define PITCH_ANGLE_KD_RPM_S_PER_RAD       939.3f
+#define PITCH_ANGLE_KP_RPM_PER_RAD          43.6f
+#define PITCH_ANGLE_KI_RPM_PER_RAD_S        39.64f
+/* 实测接近目标时外环 D 会把同向速度目标提前压成零，并与制动前馈叠加形成冲击。
+ * Pitch 阻尼改由陀螺速度环和停车距离制动提供，外环 D 暂时关闭。 */
+#define PITCH_ANGLE_KD_RPM_S_PER_RAD         0.0f
 #define PITCH_ANGLE_INTEGRAL_LIMIT_RPM    30.0f
 /* 仅抑制实测 -60° 处的 Pitch 位置 D 窄带共振。陷波不进入 P/I、
  * 速度环或前馈路径；3.33 Hz 增益保持 0.99 以上，避免影响 300 ms 阶跃要求。 */
@@ -135,11 +136,77 @@
 #define PITCH_POSITION_D_LOW_ANGLE_SCALE_ENABLE 1U
 #define PITCH_POSITION_D_LOW_ANGLE_START_DEG  (-45.0f)
 #define PITCH_POSITION_D_LOW_ANGLE_FULL_DEG   (-55.0f)
-#define PITCH_POSITION_D_LOW_ANGLE_SCALE        0.25f
+#define PITCH_POSITION_D_LOW_ANGLE_SCALE        0.45f
+/* Pitch 大阶跃起步段不靠位置 D 抑制：误差大于 DISABLE 时 D=0，
+ * 误差小于 RESTORE 时恢复到低角度衰减后的 D，中间线性渐入。 */
+#define PITCH_POSITION_D_STEP_FADE_ENABLE       1U
+#define PITCH_POSITION_D_STEP_DISABLE_ERROR_DEG 5.0f
+#define PITCH_POSITION_D_STEP_RESTORE_ERROR_DEG 2.0f
+/* 位置环输出方向保护：误差仍大时，不允许 D 项把速度目标推成远离目标的方向。 */
+#define PITCH_POSITION_OUTPUT_DIRECTION_GUARD_ENABLE 1U
+#define PITCH_POSITION_OUTPUT_DIRECTION_GUARD_ERROR_DEG 0.6f
+/* 到位保持带：硬置零会在残余速度未完全消失时放开控制，实测会形成到位后波动；
+ * 默认关闭，仅保留为回退开关。 */
+#define PITCH_SETTLE_HOLD_ENABLE             0U
+#define PITCH_SETTLE_HOLD_ENTER_ERROR_DEG    0.18f
+#define PITCH_SETTLE_HOLD_EXIT_ERROR_DEG     0.35f
+#define PITCH_SETTLE_HOLD_ENTER_SPEED_DEG_S 18.0f
+/* 近目标软限速：进入目标附近后按误差线性收缩外环最大速度，不清 PID 记忆、
+ * 不硬置零。误差越小，允许速度越小，避免固定 10°/s 在稳态区形成偏置。 */
+#define PITCH_NEAR_TARGET_SPEED_CLAMP_ENABLE 1U
+#define PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG 0.6f
+#define PITCH_NEAR_TARGET_SPEED_LIMIT_DEG_S 12.0f
+/* 小误差低速静态纠偏：死区外连续增加补偿，误差超过 MAX 后保持端点值，
+ * 不再在 MAX 边界突然撤掉。输出在电机指令域。 */
+#define PITCH_STATIC_ERROR_COMP_ENABLE      1U
+#define PITCH_STATIC_ERROR_COMP_DEADBAND_DEG 0.10f
+#define PITCH_STATIC_ERROR_COMP_MAX_ERROR_DEG 1.0f
+#define PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S 1.0f
+#define PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S 8.0f
+#define PITCH_STATIC_ERROR_COMP_VOLT_PER_DEG 20000.0f
+#define PITCH_STATIC_ERROR_COMP_LIMIT       3200.0f
+/* 目标大步进会让误差 D 吃到目标阶跃，并把上一角度的积分带到下一角度。
+ * 超过该阈值时重置 Pitch 位置环状态，仅清位置环 I/D 记忆，不改速度环和前馈。 */
+#define PITCH_POSITION_STEP_RESET_RAD       (5.0f * TASK_DEG_TO_RAD)
 /* Pitch 限速总开关：0=不限制轨迹速度/加速度，也不限制位置环速度目标；
  * 1=使用 PITCH_MAX_SPEED_RPM 和 PITCH_TRAJECTORY_* 做保守阶跃。 */
 #define PITCH_SPEED_LIMIT_ENABLE           0U
 #define PITCH_MAX_SPEED_RPM                70.0f
+/* 接近目标动态限速：远离目标时允许 P 给大速度，接近目标时按含响应延迟的
+ * 停车距离反解允许速度，避免靠继续加 D 来压超调。单位沿用本工程 Pitch
+ * 外环的 deg/s。 */
+#define PITCH_APPROACH_SPEED_LIMIT_ENABLE  1U
+#define PITCH_APPROACH_BRAKE_ACCEL_DEG_S2  2500.0f
+#define PITCH_APPROACH_MIN_SPEED_DEG_S       25.0f
+/* 小误差区最小速度渐隐：避免接近目标后仍因 25°/s 下限来回摆动。 */
+#define PITCH_APPROACH_MIN_SPEED_FADE_ENABLE 1U
+#define PITCH_APPROACH_MIN_SPEED_FADE_ERROR_DEG 0.6f
+#define PITCH_APPROACH_MIN_SPEED_NEAR_DEG_S  3.0f
+/* 三类运动使用不同停车模型：低角度向上保留已验证的 0.60 衰减；高角度
+ * 向上实际制动更强，因此提高等效减速度；向下增加控制响应距离。 */
+#define PITCH_APPROACH_LOW_ANGLE_SCALE_ENABLE 1U
+#define PITCH_APPROACH_LOW_ANGLE_TARGET_MAX_DEG (-25.0f)
+#define PITCH_APPROACH_LOW_ANGLE_SCALE          0.60f
+#define PITCH_APPROACH_LOW_TARGET_DOWN_MAX_DEG (-45.0f)
+#define PITCH_APPROACH_DOWN_BRAKE_DELAY_S        0.020f
+#define PITCH_APPROACH_LOW_TARGET_DOWN_BRAKE_DELAY_S 0.030f
+#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_DELAY_S 0.010f
+#define PITCH_APPROACH_HIGH_ANGLE_UP_ACCEL_SCALE  2.00f
+#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_DELAY_S 0.000f
+/* 速度目标只向目标方向收缩，不生成反向速度。停车曲线计入控制响应延迟：
+ * distance = |v|*delay + v^2/(2*a)。制动电压按超速量生成并限制变化率。 */
+#define PITCH_APPROACH_BRAKE_FF_ENABLE      1U
+#define PITCH_APPROACH_LOW_ANGLE_BRAKE_START_ERROR_DEG 6.0f
+#define PITCH_APPROACH_LOW_ANGLE_BRAKE_FULL_ERROR_DEG  4.0f
+#define PITCH_APPROACH_BRAKE_FF_STOP_SPEED_DEG_S 3.0f
+#define PITCH_APPROACH_DOWN_BRAKE_FF_GAIN       120.0f
+#define PITCH_APPROACH_DOWN_BRAKE_FF_LIMIT     8000.0f
+#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_FF_GAIN 180.0f
+#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_FF_LIMIT 8000.0f
+#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_FF_GAIN 90.0f
+#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_FF_LIMIT 4500.0f
+/* 400000/s 等于每个 1 ms 控制周期最多变化 400 个电压指令单位。 */
+#define PITCH_APPROACH_BRAKE_FF_SLEW_VOLT_PER_S 400000.0f
 #define PITCH_SPEED_KP                    172.6f
 #define PITCH_SPEED_KI                      12.0f
 /* Pitch 速度环 D 项是“每 1 ms 拍的误差差量”：
@@ -160,7 +227,8 @@
  * 再开但把阈值提到 10~15°/s、下限降到 2000~4000 减小冲击。 */
 #define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
 #define PITCH_STARTUP_MIN_VOLTAGE           0.0f
-#define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (0.0f * TASK_DEG_TO_RAD)
+/* 位置环积分分离：大误差阶跃过程不积分，靠近目标后再用 I 消稳态误差。 */
+#define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (1.5f * TASK_DEG_TO_RAD)
 /* 预留的目标死区参数，当前未接入 Pitch 控制链。MISSION 要求保持在 ±0.2° 内，
  * 因此不能直接启用当前 0.5° 数值来掩盖稳态抖动。 */
 #define PITCH_POSITION_DEADZONE_RAD         (0.5f * TASK_DEG_TO_RAD)
@@ -178,8 +246,8 @@
 #define PITCH_HOME_TO_POWER_ON_POSITION     1U
 /* Pitch 重力前馈 3 阶标定曲线，输出直接作为 GM6020 电压前馈。
  * PITCH_GRAVITY_C1_GR 是 C1_gr 的上电默认值，运行时可在 Watch 里改 C1_gr。 */
-#define PITCH_GRAVITY_FIT_MIN_DEG          (-49.0f)
-#define PITCH_GRAVITY_FIT_MAX_DEG            25.0f
+#define PITCH_GRAVITY_FIT_MIN_DEG          (-50.0f)
+#define PITCH_GRAVITY_FIT_MAX_DEG            26.0f
 #define PITCH_GRAVITY_POLY_C0             1678.105241f
 #define PITCH_GRAVITY_C1_GR                161.466898f
 #define PITCH_GRAVITY_POLY_C2             (-0.590091f)
@@ -266,9 +334,9 @@
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
  * 电机轴转速环。输出限幅放满 10A：推弹瞬间负载大，8A 不够顶会掉速。
  * 之前 KP=10/KI=2 偏保守导致"实际比目标少 1~2 颗"(连发稳态掉速+起步滞后)，
- * 这里把 KP 提到 100、KI 提到 4、积分限幅 2000→3000，让速度环更跟手、稳态误差更小。
+ * 这里把 KP 提到 50、KI 提到 4、积分限幅 2000→3000，让速度环更跟手、稳态误差更小。
  * 注意别再加太多，否则弹丸顶开后积分+饱和 P 会把电机猛冲过 4800 撞下一颗弹。 */
-#define LAUNCH_M2006_ID5_SPEED_KP         100.0f
+#define LAUNCH_M2006_ID5_SPEED_KP         50.0f
 #define LAUNCH_M2006_ID5_SPEED_KI         4.0f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   3000.0f

@@ -460,6 +460,11 @@
               <FilePath>../Tasks/Inc/notch_filter.h</FilePath>
             </File>
             <File>
+              <FileName>pitch_approach.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>../Tasks/Inc/pitch_approach.h</FilePath>
+            </File>
+            <File>
               <FileName>yaw_hold.h</FileName>
               <FileType>5</FileType>
               <FilePath>../Tasks/Inc/yaw_hold.h</FilePath>
@@ -488,6 +493,11 @@
               <FileName>notch_filter.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Tasks/Src/notch_filter.c</FilePath>
+            </File>
+            <File>
+              <FileName>pitch_approach.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Tasks/Src/pitch_approach.c</FilePath>
             </File>
             <File>
               <FileName>yaw_hold.c</FileName>

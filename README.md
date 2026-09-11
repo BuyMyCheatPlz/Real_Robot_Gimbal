@@ -247,6 +247,13 @@ BMI088 的安装轴、轴符号和滤波权重均可在 `Tasks/Inc/config.h` 中
   未接入控制链，避免 0.5° 死区破坏 MISSION 要求的 ±0.2°保持精度。
 - 位置环 D 通道串联 23.7 Hz 与 32 Hz 陷波器，抑制重载机构在 -60° 附近的窄带共振；
   P/I、速度环和重力前馈不经过该滤波，低频阶跃与稳态位置精度保持不变。
+- 低 Pitch 角度区位置 D 通过 `PITCH_POSITION_D_LOW_ANGLE_SCALE` 做可调衰减；
+  默认 -45° 开始线性过渡，-55° 以下按该比例保留 D 项，P/I、速度环和前馈不变。
+- Pitch 目标变化超过 `PITCH_POSITION_STEP_RESET_RAD` 时会重置位置环 I/D 记忆；
+  位置环积分只在 `PITCH_ANGLE_INTEGRAL_SEPARATION_RAD` 内启用，避免大阶跃积分残留导致超调。
+- `PITCH_APPROACH_SPEED_LIMIT_ENABLE=1` 时，位置环速度目标按剩余误差动态限速；
+  远处仍能快速阶跃，接近目标时按刹车加速度提前收速，避免继续加 D 导致抖动。
+  低 Pitch 角度区可通过 `PITCH_APPROACH_LOW_ANGLE_SCALE` 单独提前刹车，专门处理 -60° 超调。
 - 内层速度 PID 输出 GM6020 电压命令，速度反馈用映射到 `roll_rate_rad_s` 的 BMI088 角速度；本机 Pitch 主轴经三轴诊断确认为 raw X。
 - 根据连续 Pitch 编码器角计算 3 阶标定重力电压前馈，标定区间外按端点补偿。
 - 上电后用首次有效、映射到 `roll_rad` 的 BMI088 姿态角给编码器建立零偏；

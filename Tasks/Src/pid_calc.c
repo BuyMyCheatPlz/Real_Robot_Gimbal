@@ -5,6 +5,7 @@
 #include "dm4310.h"
 #include "config.h"
 #include "notch_filter.h"
+#include "pitch_approach.h"
 #include "yaw_hold.h"
 #include "yaw_startup.h"
 #include <math.h>
@@ -38,7 +39,7 @@ typedef struct
     uint8_t initialized;
     NotchFilter_t *derivative_notch;
     NotchFilter_t *derivative_notch2;
-    float (*derivative_scale)(float measurement);
+    float (*derivative_scale)(float measurement, float error);
 } PositionPid_t;
 
 volatile GimbalControlState_t gimbal_control_state;
@@ -159,26 +160,88 @@ static float yaw_angle_difference(float target, float measurement)
     return normalize_yaw_rad(target - measurement);
 }
 
-static float pitch_position_d_scale(float measurement_deg)
+static float pitch_position_d_scale(float measurement_deg, float error_deg)
 {
+    float scale = 1.0f;
 #if (PITCH_POSITION_D_LOW_ANGLE_SCALE_ENABLE != 0U)
-    float scale = PITCH_POSITION_D_LOW_ANGLE_SCALE;
+    float low_angle_scale = PITCH_POSITION_D_LOW_ANGLE_SCALE;
     float start = PITCH_POSITION_D_LOW_ANGLE_START_DEG;
     float full = PITCH_POSITION_D_LOW_ANGLE_FULL_DEG;
     float blend;
 
-    if (scale < 0.0f) scale = 0.0f;
-    if (scale > 1.0f) scale = 1.0f;
-    if (full >= start) return scale;
-    if (measurement_deg >= start) return 1.0f;
-    if (measurement_deg <= full) return scale;
-
-    blend = (start - measurement_deg) / (start - full);
-    return 1.0f + (scale - 1.0f) * blend;
-#else
-    (void)measurement_deg;
-    return 1.0f;
+    if (low_angle_scale < 0.0f) low_angle_scale = 0.0f;
+    if (low_angle_scale > 1.0f) low_angle_scale = 1.0f;
+    if (full >= start)
+        scale = low_angle_scale;
+    else if (measurement_deg <= full)
+        scale = low_angle_scale;
+    else if (measurement_deg < start)
+    {
+        blend = (start - measurement_deg) / (start - full);
+        scale = 1.0f + (low_angle_scale - 1.0f) * blend;
+    }
 #endif
+#if (PITCH_POSITION_D_STEP_FADE_ENABLE != 0U)
+    {
+        float abs_error = fabsf(error_deg);
+        float disable_error = PITCH_POSITION_D_STEP_DISABLE_ERROR_DEG;
+        float restore_error = PITCH_POSITION_D_STEP_RESTORE_ERROR_DEG;
+        float blend;
+
+        if (disable_error > restore_error)
+        {
+            if (abs_error >= disable_error)
+                scale = 0.0f;
+            else if (abs_error > restore_error)
+            {
+                blend = (disable_error - abs_error) /
+                    (disable_error - restore_error);
+                scale *= blend;
+            }
+        }
+    }
+#endif
+    return scale;
+}
+
+static float signf(float value)
+{
+    if (value > 0.0f) return 1.0f;
+    if (value < 0.0f) return -1.0f;
+    return 0.0f;
+}
+
+static float pitch_position_output_direction_guard(float speed_target_deg_s,
+                                                   float error_deg)
+{
+#if (PITCH_POSITION_OUTPUT_DIRECTION_GUARD_ENABLE != 0U)
+    if ((fabsf(error_deg) > PITCH_POSITION_OUTPUT_DIRECTION_GUARD_ERROR_DEG) &&
+        ((speed_target_deg_s * error_deg) < 0.0f))
+        return 0.0f;
+#else
+    (void)error_deg;
+#endif
+    return speed_target_deg_s;
+}
+
+static float pitch_near_target_speed_clamp(float speed_target_deg_s,
+                                           float error_deg)
+{
+#if (PITCH_NEAR_TARGET_SPEED_CLAMP_ENABLE != 0U)
+    float abs_error = fabsf(error_deg);
+    if ((PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG > 0.0f) &&
+        (abs_error < PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG))
+    {
+        float limit = PITCH_NEAR_TARGET_SPEED_LIMIT_DEG_S *
+            abs_error / PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG;
+        if (limit < 0.0f)
+            limit = 0.0f;
+        return clampf(speed_target_deg_s, limit);
+    }
+#else
+    (void)error_deg;
+#endif
+    return speed_target_deg_s;
 }
 
 static float position_pid(PositionPid_t *pid, float target, float measurement,
@@ -198,7 +261,7 @@ static float position_pid(PositionPid_t *pid, float target, float measurement,
         derivative = NotchFilter_Update(pid->derivative_notch, derivative);
         derivative = NotchFilter_Update(pid->derivative_notch2, derivative);
         if (pid->derivative_scale != 0)
-            derivative *= pid->derivative_scale(measurement);
+            derivative *= pid->derivative_scale(measurement, error);
     }
     else
         pid->initialized = 1U;
@@ -230,13 +293,6 @@ static void reset_position_pid(PositionPid_t *pid)
     pid->initialized = 0U;
     NotchFilter_Reset(pid->derivative_notch);
     NotchFilter_Reset(pid->derivative_notch2);
-}
-
-static float signf(float value)
-{
-    if (value > 0.0f) return 1.0f;
-    if (value < 0.0f) return -1.0f;
-    return 0.0f;
 }
 
 static float pitch_gravity_comp(float angle_rad)
@@ -344,6 +400,7 @@ void PID_calc(void *argument)
     };
     YawHoldState_t yaw_hold_state = {0U};
     YawStartupState_t yaw_startup_state = {0U};
+    PitchApproachState_t pitch_approach_state = {0.0f};
     int32_t pitch_total_count = 0;
     uint16_t pitch_previous_count = 0U;
     int32_t yaw_total_count = 0;
@@ -362,6 +419,9 @@ void PID_calc(void *argument)
     float pitch_profile_target = 0.0f;
     float pitch_profile_speed = 0.0f;
     float pitch_profile_acceleration = 0.0f;
+#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
+    uint8_t pitch_settle_hold_active = 0U;
+#endif
     float pitch_gravity_angle_offset = 0.0f;
     float pitch_trajectory_max_speed = PITCH_TRAJECTORY_MAX_SPEED_RAD_S;
     float pitch_trajectory_max_accel = PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2;
@@ -559,7 +619,20 @@ void PID_calc(void *argument)
             if ((message.flags & GIMBAL_MSG_PITCH_DELTA) != 0U)
             {
                 if (pitch_target_initialized != 0U)
+                {
+                    if (fabsf(message.pitch_delta_rad) >=
+                        PITCH_POSITION_STEP_RESET_RAD)
+                    {
+                        reset_position_pid(&pitch_angle_pid);
+                        PitchApproach_Reset(&pitch_approach_state);
+#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
+                        pitch_settle_hold_active = 0U;
+#endif
+                        pitch_profile_speed = 0.0f;
+                        pitch_profile_acceleration = 0.0f;
+                    }
                     pitch_target += message.pitch_delta_rad;
+                }
                 else
                     pending_pitch_delta += message.pitch_delta_rad;
             }
@@ -690,6 +763,10 @@ void PID_calc(void *argument)
                 pitch_target_initialized = 0U;
                 pitch_encoder_initialized = 0U;
                 reset_position_pid(&pitch_angle_pid);
+                PitchApproach_Reset(&pitch_approach_state);
+#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
+                pitch_settle_hold_active = 0U;
+#endif
                 MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
                 can1_gm6020_id2.output_hold = 0U;   /* 失去控制权即解除锁存 */
                 pitch_hold_active = 0U;
@@ -797,6 +874,7 @@ void PID_calc(void *argument)
                 sysid_command = Gimbal_YawSysid_Update(now_ms, control_dt_s);
                 /* Pitch：前馈 0、速度 0，位置/速度 PID 每周期复位，无输出 */
                 reset_position_pid(&pitch_angle_pid);
+                PitchApproach_Reset(&pitch_approach_state);
                 MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
                 GM6020_SetVoltageFeedforward(&can1_gm6020_id2, 0.0f);
                 GM6020_SetSpeed(&can1_gm6020_id2, 0.0f);
@@ -829,6 +907,7 @@ void PID_calc(void *argument)
                 /* DM4310 离线：中止辨识；pitch/yaw 断电，其余电机按常规停机 */
                 Gimbal_YawSysid_Abort();
                 reset_position_pid(&pitch_angle_pid);
+                PitchApproach_Reset(&pitch_approach_state);
                 MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
                 reset_position_pid(&yaw_angle_pid);
                 MotorSpeedPid_Reset(&can2_dm4310_id1.speed_pid);
@@ -861,6 +940,8 @@ void PID_calc(void *argument)
                      (yaw_target_initialized != 0U))
             {
                 float gravity_feedforward = 0.0f;
+                float pitch_error_deg = 0.0f;
+                float pitch_actual_speed_deg_s = 0.0f;
                 uint8_t was_holding;
                 uint8_t yaw_holding;
                 if (yaw_target_initialized != 0U)
@@ -946,6 +1027,7 @@ void PID_calc(void *argument)
                         if (pitch_hold_active == 0U)
                         {
                             pitch_hold_active = 1U;
+                            PitchApproach_Reset(&pitch_approach_state);
                             can1_gm6020_id2.output_hold = 1U;
                             can1_gm6020_id2.held_output =
                                 (int16_t)can1_gm6020_id2.last_output;
@@ -959,6 +1041,7 @@ void PID_calc(void *argument)
                         if (pitch_hold_active != 0U)
                         {
                             pitch_hold_active = 0U;
+                            PitchApproach_Reset(&pitch_approach_state);
                             can1_gm6020_id2.output_hold = 0U;
                             /* 解锁：重置速度环，避免保持期与恢复期的速度/滤波
                              * 状态衔接时出现积分或微分跳变。 */
@@ -969,6 +1052,7 @@ void PID_calc(void *argument)
                         if (PITCH_GRAVITY_ONLY_ENABLE != 0U)
                         {
                             reset_position_pid(&pitch_angle_pid);
+                            PitchApproach_Reset(&pitch_approach_state);
                             MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
                             MotorSpeedPid_SetGains(
                                 &can1_gm6020_id2.speed_pid,
@@ -1010,6 +1094,53 @@ void PID_calc(void *argument)
                                              pitch_profile_target * RAD_TO_DEG,
                                              pitch_angle_actual * RAD_TO_DEG,
                                              control_dt_s);
+                            {
+                                pitch_error_deg = (pitch_profile_target -
+                                    pitch_angle_actual) * RAD_TO_DEG;
+                                pitch_actual_speed_deg_s =
+                                    bmi_roll_rate_rad_s * RAD_TO_DEG;
+#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
+                                if (pitch_settle_hold_active != 0U)
+                                {
+                                    if (fabsf(pitch_error_deg) >
+                                        PITCH_SETTLE_HOLD_EXIT_ERROR_DEG)
+                                    {
+                                        pitch_settle_hold_active = 0U;
+                                    }
+                                }
+                                else if ((fabsf(pitch_error_deg) <=
+                                          PITCH_SETTLE_HOLD_ENTER_ERROR_DEG) &&
+                                         (fabsf(pitch_actual_speed_deg_s) <=
+                                          PITCH_SETTLE_HOLD_ENTER_SPEED_DEG_S))
+                                {
+                                    pitch_settle_hold_active = 1U;
+                                    reset_position_pid(&pitch_angle_pid);
+                                }
+                                if (pitch_settle_hold_active != 0U)
+                                {
+                                    reset_position_pid(&pitch_angle_pid);
+                                    PitchApproach_Reset(
+                                        &pitch_approach_state);
+                                    pitch_speed_target_rpm = 0.0f;
+                                }
+                                else
+#endif
+                                {
+                            pitch_speed_target_rpm =
+                                pitch_position_output_direction_guard(
+                                    pitch_speed_target_rpm,
+                                    pitch_error_deg);
+                            pitch_speed_target_rpm =
+                                pitch_near_target_speed_clamp(
+                                    pitch_speed_target_rpm,
+                                    pitch_error_deg);
+                            pitch_speed_target_rpm =
+                                PitchApproach_LimitSpeed(
+                                    pitch_speed_target_rpm,
+                                    pitch_error_deg,
+                                    pitch_angle_actual * RAD_TO_DEG);
+                                }
+                            }
                             if (PITCH_SPEED_LIMIT_ENABLE != 0U)
                             {
                                 pitch_speed_target_rpm = clampf(
@@ -1022,6 +1153,21 @@ void PID_calc(void *argument)
                         gravity_feedforward = pitch_gravity_comp(
                             pitch_angle_actual + pitch_gravity_angle_offset);
                         pitch_motor_feedforward = gravity_feedforward;
+#if (PITCH_GRAVITY_ONLY_ENABLE == 0U)
+                        pitch_motor_feedforward +=
+                            PitchApproach_StaticErrorComp(
+                                pitch_error_deg,
+                                pitch_actual_speed_deg_s,
+                                PITCH_CONTROL_TO_MOTOR_SIGN);
+                        pitch_motor_feedforward +=
+                            PitchApproach_UpdateBrakeFeedforward(
+                                &pitch_approach_state,
+                                pitch_error_deg,
+                                pitch_angle_actual * RAD_TO_DEG,
+                                pitch_actual_speed_deg_s,
+                                PITCH_CONTROL_TO_MOTOR_SIGN,
+                                control_dt_s);
+#endif
                         GM6020_SetVoltageFeedforward(&can1_gm6020_id2,
                             pitch_motor_feedforward);
                         GM6020_SetSpeed(&can1_gm6020_id2,
@@ -1051,6 +1197,7 @@ void PID_calc(void *argument)
                     pitch_encoder_initialized = 0U;
                     yaw_encoder_initialized = 0U;
                     YawStartup_Reset(&yaw_startup_state);
+                    PitchApproach_Reset(&pitch_approach_state);
                     can1_gm6020_id2.output_hold = 0U;   /* 故障下退出锁存 */
                     pitch_hold_active = 0U;
                     pitch_hold_until_ms = 0U;
@@ -1063,6 +1210,7 @@ void PID_calc(void *argument)
             }
             else
             {
+                PitchApproach_Reset(&pitch_approach_state);
                 GM6020_SetVoltageFeedforward(&can1_gm6020_id2, 0.0f);
                 GM6020_SetSpeed(&can1_gm6020_id2, 0.0f);
                 DM4310_SetSpeed(&can2_dm4310_id1, 0.0f);

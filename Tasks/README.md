@@ -25,8 +25,16 @@
   位置环输出目标转速，进入 GM6020 速度 PID。
 - `PITCH_POSITION_DEADZONE_RAD` 当前仅为预留参数，未接入 Pitch 控制链；不能用
   0.5° 死区掩盖抖动，否则会超过 MISSION 的 ±0.2°保持精度。
-- Pitch 位置环 D 的误差差分串联 23.7 Hz 与 32 Hz 陷波器，抑制 -60° 附近实测的
-  窄带机构共振；P/I、速度环与重力前馈链路保持不变。
+- Pitch 位置环 D 当前设为 0。实测中该 D 项在约 2° 误差处过早抵消 P 项，造成速度目标
+  先归零、实际轴在目标前制动后回摆；阻尼改由陀螺仪速度环和停车距离控制承担。
+  两级位置 D 陷波与低角度衰减代码保留，重新启用位置 D 时才参与控制。
+- Pitch 目标变化超过 `PITCH_POSITION_STEP_RESET_RAD` 时会重置位置环 I/D 记忆；
+  位置环积分只在 `PITCH_ANGLE_INTEGRAL_SEPARATION_RAD` 内启用，避免大阶跃积分残留导致超调。
+- `PITCH_APPROACH_SPEED_LIMIT_ENABLE=1` 时，位置环速度目标按剩余误差动态限速；
+  停车曲线同时计入速度环响应延迟和制动距离，限速结果只允许朝向目标或为零，不用
+  反向速度目标制造制动。实际速度超过停车曲线时，由独立电压前馈制动；制动力按
+  `PITCH_APPROACH_BRAKE_FF_SLEW_VOLT_PER_S` 限制每拍变化，穿越目标后仍按实际速度继续制动。
+  向下、低角度向上和高角度向上分别使用独立的延迟、加速度、增益和限幅参数。
 - Pitch 目标直接钳位到实测机械限位（`PITCH_LIMIT_MIN_RAD`/`PITCH_LIMIT_MAX_RAD`，
   IMU Pitch -139°（最高）~-64°（最低）），不靠卡限位检测。
 - `PITCH_SPEED_LIMIT_ENABLE=0` 时直接跟踪阶跃目标，不限制轨迹速度/加速度和位置环
