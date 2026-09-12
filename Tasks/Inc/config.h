@@ -67,7 +67,9 @@
 #define ATTITUDE_MAX_DT_S                 0.010f
 
 /* ---------------- 云台反馈低通滤波 ---------------- */
-#define PITCH_ENCODER_LPF_ALPHA           0.15f
+/* GM6020 编码器分辨率足以满足 ±0.2°；设为 1 直接使用新反馈，避免原 0.15
+ * 在高速段产生约 5.7 ms 延迟和数度动态位置误差。 */
+#define PITCH_ENCODER_LPF_ALPHA           1.0f
 /* Pitch 速度环直接使用映射后的 BMI088 角速度反馈，不再额外低通。 */
 #define PITCH_SPEED_LPF_ALPHA             1.0f
 /* 旧 IMU Roll 前馈滤波宏；当前动态重力前馈应优先使用连续 Pitch 编码器角，
@@ -151,9 +153,9 @@
 #define PITCH_SETTLE_HOLD_ENTER_ERROR_DEG    0.18f
 #define PITCH_SETTLE_HOLD_EXIT_ERROR_DEG     0.35f
 #define PITCH_SETTLE_HOLD_ENTER_SPEED_DEG_S 18.0f
-/* 近目标软限速：进入目标附近后按误差线性收缩外环最大速度，不清 PID 记忆、
- * 不硬置零。误差越小，允许速度越小，避免固定 10°/s 在稳态区形成偏置。 */
-#define PITCH_NEAR_TARGET_SPEED_CLAMP_ENABLE 1U
+/* 旧近目标软限速在 0.6° 边界把速度指令从约 12 突然切回 26°/s，形成回摆；
+ * 当前关闭，由连续位置 PI 和停车距离限速共同收速。 */
+#define PITCH_NEAR_TARGET_SPEED_CLAMP_ENABLE 0U
 #define PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG 0.6f
 #define PITCH_NEAR_TARGET_SPEED_LIMIT_DEG_S 12.0f
 /* 小误差低速静态纠偏：死区外连续增加补偿，误差超过 MAX 后保持端点值，
@@ -165,6 +167,13 @@
 #define PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S 8.0f
 #define PITCH_STATIC_ERROR_COMP_VOLT_PER_DEG 20000.0f
 #define PITCH_STATIC_ERROR_COMP_LIMIT       3200.0f
+/* -60° 区域的瞬时静差补偿会与机构 17.5 Hz 模态形成极限环，因此在低角度区
+ * 使用较低刚度，并对所有角度的补偿输出限制变化率。 */
+#define PITCH_STATIC_ERROR_COMP_LOW_ANGLE_TARGET_MAX_DEG (-45.0f)
+#define PITCH_STATIC_ERROR_COMP_LOW_ANGLE_VOLT_PER_DEG 5000.0f
+#define PITCH_STATIC_ERROR_COMP_LOW_ANGLE_LIMIT       1000.0f
+/* 20000/s 等于每个 1 ms 控制周期最多变化 20 个电压指令单位。 */
+#define PITCH_STATIC_ERROR_COMP_SLEW_VOLT_PER_S      20000.0f
 /* 目标大步进会让误差 D 吃到目标阶跃，并把上一角度的积分带到下一角度。
  * 超过该阈值时重置 Pitch 位置环状态，仅清位置环 I/D 记忆，不改速度环和前馈。 */
 #define PITCH_POSITION_STEP_RESET_RAD       (5.0f * TASK_DEG_TO_RAD)
@@ -190,12 +199,13 @@
 #define PITCH_APPROACH_LOW_TARGET_DOWN_MAX_DEG (-45.0f)
 #define PITCH_APPROACH_DOWN_BRAKE_DELAY_S        0.020f
 #define PITCH_APPROACH_LOW_TARGET_DOWN_BRAKE_DELAY_S 0.030f
-#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_DELAY_S 0.010f
+#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_DELAY_S 0.030f
 #define PITCH_APPROACH_HIGH_ANGLE_UP_ACCEL_SCALE  2.00f
-#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_DELAY_S 0.000f
+#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_DELAY_S 0.040f
 /* 速度目标只向目标方向收缩，不生成反向速度。停车曲线计入控制响应延迟：
- * distance = |v|*delay + v^2/(2*a)。制动电压按超速量生成并限制变化率。 */
-#define PITCH_APPROACH_BRAKE_FF_ENABLE      1U
+ * distance = |v|*delay + v^2/(2*a)。动态制动前馈与速度 PI 重复使用同一
+ * 超速量，实测会造成到位前反转，因此关闭，仅由速度 PI 执行制动。 */
+#define PITCH_APPROACH_BRAKE_FF_ENABLE      0U
 #define PITCH_APPROACH_LOW_ANGLE_BRAKE_START_ERROR_DEG 6.0f
 #define PITCH_APPROACH_LOW_ANGLE_BRAKE_FULL_ERROR_DEG  4.0f
 #define PITCH_APPROACH_BRAKE_FF_STOP_SPEED_DEG_S 3.0f

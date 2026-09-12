@@ -142,7 +142,11 @@ float PitchApproach_LimitSpeed(float speed_target_deg_s,
 
 void PitchApproach_Reset(PitchApproachState_t *state)
 {
-    if (state != 0) state->brake_voltage = 0.0f;
+    if (state != 0)
+    {
+        state->brake_voltage = 0.0f;
+        state->static_voltage = 0.0f;
+    }
 }
 
 float PitchApproach_UpdateBrakeFeedforward(PitchApproachState_t *state,
@@ -205,44 +209,74 @@ float PitchApproach_UpdateBrakeFeedforward(PitchApproachState_t *state,
 #endif
 }
 
-float PitchApproach_StaticErrorComp(float error_deg,
-                                    float speed_deg_s,
-                                    float control_to_motor_sign)
+float PitchApproach_UpdateStaticErrorComp(PitchApproachState_t *state,
+                                          float error_deg,
+                                          float measurement_deg,
+                                          float speed_deg_s,
+                                          float control_to_motor_sign,
+                                          float dt_s)
 {
 #if (PITCH_STATIC_ERROR_COMP_ENABLE != 0U)
     float abs_error = fabsf(error_deg);
     float abs_speed = fabsf(speed_deg_s);
+    float target_deg = measurement_deg + error_deg;
     float effective_error;
-    float voltage;
+    float gain = PITCH_STATIC_ERROR_COMP_VOLT_PER_DEG;
+    float limit = PITCH_STATIC_ERROR_COMP_LIMIT;
+    float target_voltage = 0.0f;
     float speed_scale = 1.0f;
+    float max_delta;
+    float delta;
 
-    if ((abs_error <= PITCH_STATIC_ERROR_COMP_DEADBAND_DEG) ||
-        (abs_speed >= PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S))
-        return 0.0f;
-
-    effective_error = abs_error;
-    if (effective_error > PITCH_STATIC_ERROR_COMP_MAX_ERROR_DEG)
-        effective_error = PITCH_STATIC_ERROR_COMP_MAX_ERROR_DEG;
-    if (PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S >
-        PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S)
+    if (state == 0) return 0.0f;
+    if ((dt_s <= 0.0f) ||
+        (PITCH_STATIC_ERROR_COMP_SLEW_VOLT_PER_S <= 0.0f))
     {
-        if (abs_speed > PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S)
+        state->static_voltage = 0.0f;
+        return 0.0f;
+    }
+    if (target_deg <= PITCH_STATIC_ERROR_COMP_LOW_ANGLE_TARGET_MAX_DEG)
+    {
+        gain = PITCH_STATIC_ERROR_COMP_LOW_ANGLE_VOLT_PER_DEG;
+        limit = PITCH_STATIC_ERROR_COMP_LOW_ANGLE_LIMIT;
+    }
+    if ((abs_error > PITCH_STATIC_ERROR_COMP_DEADBAND_DEG) &&
+        (abs_speed < PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S))
+    {
+        effective_error = abs_error;
+        if (effective_error > PITCH_STATIC_ERROR_COMP_MAX_ERROR_DEG)
+            effective_error = PITCH_STATIC_ERROR_COMP_MAX_ERROR_DEG;
+        if (PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S >
+            PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S)
         {
-            speed_scale =
-                (PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S - abs_speed) /
-                (PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S -
-                 PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S);
+            if (abs_speed > PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S)
+            {
+                speed_scale =
+                    (PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S - abs_speed) /
+                    (PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S -
+                     PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S);
+            }
         }
+        target_voltage =
+            (effective_error - PITCH_STATIC_ERROR_COMP_DEADBAND_DEG) *
+            gain * speed_scale;
+        target_voltage = pitch_clamp(target_voltage, limit);
+        target_voltage *= control_to_motor_sign * pitch_sign(error_deg);
     }
 
-    voltage = (effective_error - PITCH_STATIC_ERROR_COMP_DEADBAND_DEG) *
-        PITCH_STATIC_ERROR_COMP_VOLT_PER_DEG * speed_scale;
-    voltage = pitch_clamp(voltage, PITCH_STATIC_ERROR_COMP_LIMIT);
-    return control_to_motor_sign * pitch_sign(error_deg) * voltage;
+    max_delta = PITCH_STATIC_ERROR_COMP_SLEW_VOLT_PER_S * dt_s;
+    delta = target_voltage - state->static_voltage;
+    if (delta > max_delta) delta = max_delta;
+    if (delta < -max_delta) delta = -max_delta;
+    state->static_voltage += delta;
+    return state->static_voltage;
 #else
+    if (state != 0) state->static_voltage = 0.0f;
     (void)error_deg;
+    (void)measurement_deg;
     (void)speed_deg_s;
     (void)control_to_motor_sign;
+    (void)dt_s;
     return 0.0f;
 #endif
 }

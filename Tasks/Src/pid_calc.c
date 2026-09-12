@@ -1155,10 +1155,13 @@ void PID_calc(void *argument)
                         pitch_motor_feedforward = gravity_feedforward;
 #if (PITCH_GRAVITY_ONLY_ENABLE == 0U)
                         pitch_motor_feedforward +=
-                            PitchApproach_StaticErrorComp(
+                            PitchApproach_UpdateStaticErrorComp(
+                                &pitch_approach_state,
                                 pitch_error_deg,
+                                pitch_angle_actual * RAD_TO_DEG,
                                 pitch_actual_speed_deg_s,
-                                PITCH_CONTROL_TO_MOTOR_SIGN);
+                                PITCH_CONTROL_TO_MOTOR_SIGN,
+                                control_dt_s);
                         pitch_motor_feedforward +=
                             PitchApproach_UpdateBrakeFeedforward(
                                 &pitch_approach_state,

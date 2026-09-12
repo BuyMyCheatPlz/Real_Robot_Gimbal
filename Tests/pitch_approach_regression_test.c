@@ -30,19 +30,14 @@ int main(void)
     PitchApproachState_t state;
     float limited;
     float brake;
+    float static_comp;
 
     PitchApproach_Reset(&state);
     assert(state.brake_voltage == 0.0f);
+    assert(state.static_voltage == 0.0f);
     brake = PitchApproach_UpdateBrakeFeedforward(
         &state, -4.0f, -26.0f, -200.0f, -1.0f, 0.001f);
-    assert(nearly_equal(brake,
-                        -PITCH_APPROACH_BRAKE_FF_SLEW_VOLT_PER_S * 0.001f,
-                        0.01f));
-    brake = PitchApproach_UpdateBrakeFeedforward(
-        &state, -4.0f, -26.0f, -200.0f, -1.0f, 0.001f);
-    assert(nearly_equal(brake,
-                        -2.0f * PITCH_APPROACH_BRAKE_FF_SLEW_VOLT_PER_S *
-                        0.001f, 0.01f));
+    assert(brake == 0.0f);
     PitchApproach_Reset(&state);
     assert(state.brake_voltage == 0.0f);
 
@@ -71,31 +66,41 @@ int main(void)
     assert(fabsf(limited) < fabsf(PitchApproach_LimitSpeed(
         -200.0f, -4.0f, -26.0f)));
 
-    /* 低角度向上仍按 6→4° 渐入，高角度向上使用较小制动限幅。 */
-    assert(brake_once(6.0f, -36.0f, 200.0f) == 0.0f);
-    assert(brake_once(5.0f, -35.0f, 200.0f) > 0.0f);
-    brake = brake_once(0.1f, -0.1f, 200.0f);
-    assert((brake > 0.0f) &&
-           (brake <= PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_FF_LIMIT));
+    /* 实测上升段的代表误差点必须提前收速：降低 -60→-30 穿越速度，
+     * 并把 -30→0 的制动分摊到末段，而不是到目标前才打满。 */
+    limited = PitchApproach_LimitSpeed(300.0f, 2.168f, -32.168f);
+    assert(limited < 50.0f);
+    limited = PitchApproach_LimitSpeed(300.0f, 5.7f, -5.7f);
+    assert(limited < 115.0f);
 
-    /* 穿越目标后误差虽已换向，只要仍有远离目标的速度就继续制动。 */
-    brake = brake_once(-0.1f, -29.9f, 30.0f);
-    assert(brake > 0.0f);
-    assert(brake > brake_once(-0.1f, 0.1f, 30.0f));
-    brake = brake_once(0.1f, -30.1f, -30.0f);
-    assert(brake < 0.0f);
-    assert(brake_once(-0.1f, -29.9f, 2.9f) == 0.0f);
+    /* 动态制动由速度 PI 承担，前馈通道保持为零。 */
+    assert(brake_once(5.0f, -35.0f, 200.0f) == 0.0f);
+    assert(brake_once(-0.1f, -29.9f, 30.0f) == 0.0f);
 
-    /* 静差补偿越过 MAX 后保持端点值，不允许在边界突然归零。 */
-    assert(nearly_equal(PitchApproach_StaticErrorComp(-0.2f, 0.0f, -1.0f),
-                        2000.0f, 0.01f));
-    assert(nearly_equal(PitchApproach_StaticErrorComp(0.2f, 0.0f, -1.0f),
-                        -2000.0f, 0.01f));
-    assert(PitchApproach_StaticErrorComp(0.09f, 0.0f, -1.0f) == 0.0f);
-    assert(nearly_equal(PitchApproach_StaticErrorComp(0.99f, 0.0f, -1.0f),
-                        PitchApproach_StaticErrorComp(1.01f, 0.0f, -1.0f),
-                        0.01f));
-    assert(PitchApproach_StaticErrorComp(0.2f, 8.0f, -1.0f) == 0.0f);
+    /* 静差补偿每毫秒最多变化 20，不能随误差和速度瞬间跳变。 */
+    PitchApproach_Reset(&state);
+    static_comp = PitchApproach_UpdateStaticErrorComp(
+        &state, -0.2f, -29.8f, 0.0f, -1.0f, 0.001f);
+    assert(nearly_equal(static_comp, 20.0f, 0.01f));
+    static_comp = PitchApproach_UpdateStaticErrorComp(
+        &state, -0.2f, -29.8f, 0.0f, -1.0f, 0.001f);
+    assert(nearly_equal(static_comp, 40.0f, 0.01f));
+
+    /* -45° 以下使用较低静差增益和限幅，其他角度保留原补偿能力。 */
+    PitchApproach_Reset(&state);
+    static_comp = PitchApproach_UpdateStaticErrorComp(
+        &state, -0.3f, -59.7f, 0.0f, -1.0f, 1.0f);
+    assert(nearly_equal(static_comp, 1000.0f, 0.01f));
+    PitchApproach_Reset(&state);
+    static_comp = PitchApproach_UpdateStaticErrorComp(
+        &state, -0.3f, -29.7f, 0.0f, -1.0f, 1.0f);
+    assert(nearly_equal(static_comp, 3200.0f, 0.01f));
+
+    /* 进入死区后也按斜率释放，不允许把已有补偿瞬间撤掉。 */
+    state.static_voltage = 100.0f;
+    static_comp = PitchApproach_UpdateStaticErrorComp(
+        &state, 0.09f, -30.09f, 0.0f, -1.0f, 0.001f);
+    assert(nearly_equal(static_comp, 80.0f, 0.01f));
 
     return 0;
 }
