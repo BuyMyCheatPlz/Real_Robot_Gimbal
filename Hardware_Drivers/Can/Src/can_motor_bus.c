@@ -22,11 +22,16 @@ static volatile uint32_t can2_busy_since_ms;
 
 #define GM6020_FEEDBACK_BASE_ID 0x204U
 
-static void record_gimbal_commands(int16_t gm6020_id2, int16_t dm4310_id1)
+static void record_motor_commands(int16_t m3508_id2, int16_t m3508_id3,
+                                  int16_t gm6020_id2, int16_t m2006_id5,
+                                  int16_t dm4310_id1)
 {
     uint32_t primask = __get_PRIMASK();
     __disable_irq();
+    tx_status.last_m3508_id2_command = m3508_id2;
+    tx_status.last_m3508_id3_command = m3508_id3;
     tx_status.last_gm6020_id2_command = gm6020_id2;
+    tx_status.last_m2006_id5_command = m2006_id5;
     tx_status.last_dm4310_id1_command = dm4310_id1;
     if (primask == 0U) __enable_irq();
 }
@@ -175,7 +180,7 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
 
     if ((bus_can1 == 0) || (bus_can2 == 0))
     {
-        record_gimbal_commands(0, 0);
+        record_motor_commands(0, 0, 0, 0, 0);
         return HAL_ERROR;
     }
     if (YAW_COMMISSIONING_MODE == 0U)
@@ -191,7 +196,7 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
                                              gm6020_id2);
         if (gm_control_id == 0U)
         {
-            record_gimbal_commands(0, 0);
+            record_motor_commands(0, 0, 0, 0, 0);
             return HAL_ERROR;
         }
     }
@@ -202,11 +207,23 @@ static HAL_StatusTypeDef send_commands(int16_t m3508_id2,
                                   dm4310_id1 : 0,
                                   &dm_control_id, can2_dm) == 0U)
     {
-        record_gimbal_commands(gm6020_id2, 0);
+        record_motor_commands(
+            (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U) ? m3508_id2 : 0,
+            (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U) ? m3508_id3 : 0,
+            (YAW_COMMISSIONING_MODE != 0U) ? 0 : gm6020_id2,
+            (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U) ? m2006_id5 : 0,
+            0);
         return HAL_ERROR;
     }
-    record_gimbal_commands((YAW_COMMISSIONING_MODE != 0U) ? 0 : gm6020_id2,
-                           (can2_dm4310_id1.online != 0U) ? dm4310_id1 : 0);
+    record_motor_commands(
+        ((YAW_COMMISSIONING_MODE == 0U) &&
+         (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U)) ? m3508_id2 : 0,
+        ((YAW_COMMISSIONING_MODE == 0U) &&
+         (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U)) ? m3508_id3 : 0,
+        (YAW_COMMISSIONING_MODE != 0U) ? 0 : gm6020_id2,
+        ((YAW_COMMISSIONING_MODE == 0U) &&
+         (LAUNCH_MOTOR_OUTPUT_ENABLE != 0U)) ? m2006_id5 : 0,
+        (can2_dm4310_id1.online != 0U) ? dm4310_id1 : 0);
 
     /* ===== 逐帧独立发送：每帧只需 1 个空邮箱。任一帧被卡/未 ACK 都只影响它自己，
      * 不会因为"需要 2 个空邮箱"的聚合判断把整条总线饿死。 ===== */

@@ -133,6 +133,7 @@ void Launch_Task(void *argument)
             float output_deg;
             float error_deg;
             float target_rpm;
+            float display_target_deg;
             uint16_t sw = update.feeder_switch;
 
             if (m2006_angle_initialized == 0U)
@@ -160,7 +161,10 @@ void Launch_Task(void *argument)
             if (sw != m2006_prev_switch)
             {
                 uint16_t old_sw = m2006_prev_switch;
-                m2006_target_output_deg = output_deg;
+                uint8_t keep_single_target = (uint8_t)((old_sw == 3U) &&
+                                                        (sw == 1U));
+                if (keep_single_target == 0U)
+                    m2006_target_output_deg = output_deg;
                 m2006_prev_switch = sw;
                 m2006_last_step_ms = HAL_GetTick();
                 MotorSpeedPid_Reset(&can2_m2006_id5.speed_pid);
@@ -244,17 +248,24 @@ void Launch_Task(void *argument)
             /* 显示：连发目标按 40° 取整(阶梯)，单发/保持打印精确目标 */
             if (sw == 2U)
             {
-                gimbal_control_state.m2006_target_deg =
-                    (float)(int32_t)(m2006_target_output_deg /
-                                     LAUNCH_M2006_ID5_STEP_DEG) *
+                display_target_deg = (float)(int32_t)(
+                    m2006_target_output_deg / LAUNCH_M2006_ID5_STEP_DEG) *
                     LAUNCH_M2006_ID5_STEP_DEG;
             }
             else
             {
-                gimbal_control_state.m2006_target_deg =
-                    m2006_target_output_deg;
+                display_target_deg = m2006_target_output_deg;
             }
+            gimbal_control_state.m2006_feeder_switch = sw;
+            gimbal_control_state.m2006_target_deg = display_target_deg;
             gimbal_control_state.m2006_actual_deg = output_deg;
+            gimbal_control_state.m2006_error_deg = display_target_deg - output_deg;
+            gimbal_control_state.m2006_target_speed_rpm =
+                can2_m2006_id5.target_speed_rpm;
+            gimbal_control_state.m2006_filtered_speed_rpm =
+                can2_m2006_id5.filtered_speed_rpm;
+            gimbal_control_state.m2006_raw_speed_rpm =
+                (float)can2_m2006_id5.feedback.speed_rpm;
             gimbal_control_state.m2006_target_rounds = m2006_target_rounds;
             gimbal_control_state.m2006_actual_rounds = m2006_actual_rounds;
         }
@@ -267,8 +278,13 @@ void Launch_Task(void *argument)
             m2006_actual_rounds = 0.0f;
             gimbal_control_state.m2006_target_deg = 0.0f;
             gimbal_control_state.m2006_actual_deg = 0.0f;
+            gimbal_control_state.m2006_error_deg = 0.0f;
+            gimbal_control_state.m2006_target_speed_rpm = 0.0f;
+            gimbal_control_state.m2006_filtered_speed_rpm = 0.0f;
+            gimbal_control_state.m2006_raw_speed_rpm = 0.0f;
             gimbal_control_state.m2006_target_rounds = 0.0f;
             gimbal_control_state.m2006_actual_rounds = 0.0f;
+            gimbal_control_state.m2006_feeder_switch = 0U;
         }
     }
 }

@@ -3,9 +3,9 @@
 <title>Static Call Graph - [Real_Robot_Gimbal\Real_Robot_Gimbal.axf]</title></head>
 <body><HR>
 <H1>Static Call Graph for image Real_Robot_Gimbal\Real_Robot_Gimbal.axf</H1><HR>
-<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060960: Last Updated: Sun Sep 13 17:27:19 2026
+<BR><P>#&#060CALLGRAPH&#062# ARM Linker, 5060960: Last Updated: Sun Sep 13 17:59:45 2026
 <BR><P>
-<H3>Maximum Stack Usage =        884 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
+<H3>Maximum Stack Usage =        924 bytes + Unknown(Functions without stacksize, Cycles, Untraceable Function Pointers)</H3><H3>
 Call chain for Maximum Stack Depth:</H3>
 PID_calc &rArr; CanMotorBus_UpdateSelected &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 <P>
@@ -601,8 +601,8 @@ Global Symbols
 <P><STRONG><a name="[95]"></a>__aeabi_memset</STRONG> (Thumb, 16 bytes, Stack size 0 bytes, aeabi_memset.o(.text))
 <BR><BR>[Calls]<UL><LI><a href="#[96]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;_memset
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1d2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvInitialiseNewTask
-<LI><a href="#[c6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;start_dma
+<BR>[Called By]<UL><LI><a href="#[c6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;start_dma
+<LI><a href="#[1d2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvInitialiseNewTask
 </UL>
 
 <P><STRONG><a name="[cd]"></a>__aeabi_memclr4</STRONG> (Thumb, 0 bytes, Stack size 4 bytes, rt_memclr_w.o(.text))
@@ -1042,7 +1042,7 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[d7]"></a>CanMotorBus_StopAll</STRONG> (Thumb, 22 bytes, Stack size 8 bytes, can_motor_bus.o(i.CanMotorBus_StopAll))
-<BR><BR>[Stack]<UL><LI>Max Depth = 172<LI>Call Chain = CanMotorBus_StopAll &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
+<BR><BR>[Stack]<UL><LI>Max Depth = 204<LI>Call Chain = CanMotorBus_StopAll &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 </UL>
 <BR>[Calls]<UL><LI><a href="#[d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;reset_all_control
 <LI><a href="#[d9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;guarded_send_commands
@@ -1052,7 +1052,7 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[da]"></a>CanMotorBus_StopGimbal</STRONG> (Thumb, 134 bytes, Stack size 32 bytes, can_motor_bus.o(i.CanMotorBus_StopGimbal))
-<BR><BR>[Stack]<UL><LI>Max Depth = 204<LI>Call Chain = CanMotorBus_StopGimbal &rArr; CanMotorBus_StopAll &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
+<BR><BR>[Stack]<UL><LI>Max Depth = 236<LI>Call Chain = CanMotorBus_StopGimbal &rArr; CanMotorBus_StopAll &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 </UL>
 <BR>[Calls]<UL><LI><a href="#[de]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;M3508_Update
 <LI><a href="#[df]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;M2006_Update
@@ -1067,8 +1067,8 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[6f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;PID_calc
 </UL>
 
-<P><STRONG><a name="[dc]"></a>CanMotorBus_TxHealthy</STRONG> (Thumb, 32 bytes, Stack size 80 bytes, can_motor_bus.o(i.CanMotorBus_TxHealthy))
-<BR><BR>[Stack]<UL><LI>Max Depth = 96<LI>Call Chain = CanMotorBus_TxHealthy &rArr; CanMotorBus_GetStatus &rArr; __aeabi_memcpy4
+<P><STRONG><a name="[dc]"></a>CanMotorBus_TxHealthy</STRONG> (Thumb, 32 bytes, Stack size 88 bytes, can_motor_bus.o(i.CanMotorBus_TxHealthy))
+<BR><BR>[Stack]<UL><LI>Max Depth = 104<LI>Call Chain = CanMotorBus_TxHealthy &rArr; CanMotorBus_GetStatus &rArr; __aeabi_memcpy4
 </UL>
 <BR>[Calls]<UL><LI><a href="#[cb]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;CanMotorBus_GetStatus
 </UL>
@@ -1077,7 +1077,7 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[e1]"></a>CanMotorBus_UpdateSelected</STRONG> (Thumb, 172 bytes, Stack size 40 bytes, can_motor_bus.o(i.CanMotorBus_UpdateSelected))
-<BR><BR>[Stack]<UL><LI>Max Depth = 204<LI>Call Chain = CanMotorBus_UpdateSelected &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
+<BR><BR>[Stack]<UL><LI>Max Depth = 236<LI>Call Chain = CanMotorBus_UpdateSelected &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 </UL>
 <BR>[Calls]<UL><LI><a href="#[de]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;M3508_Update
 <LI><a href="#[df]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;M2006_Update
@@ -1981,8 +1981,8 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[88]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;main
 </UL>
 
-<P><STRONG><a name="[71]"></a>Launch_Task</STRONG> (Thumb, 1216 bytes, Stack size 56 bytes, launch.o(i.Launch_Task))
-<BR><BR>[Stack]<UL><LI>Max Depth = 192<LI>Call Chain = Launch_Task &rArr; osMessageQueueGet &rArr; xQueueReceive &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<P><STRONG><a name="[71]"></a>Launch_Task</STRONG> (Thumb, 1292 bytes, Stack size 48 bytes, launch.o(i.Launch_Task))
+<BR><BR>[Stack]<UL><LI>Max Depth = 184<LI>Call Chain = Launch_Task &rArr; osMessageQueueGet &rArr; xQueueReceive &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[14e]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;M2006_SetSpeedFilterAlpha
 <LI><a href="#[14d]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;M3508_SetSpeedFilterAlpha
@@ -2231,8 +2231,8 @@ Global Symbols
 <BR><BR>[Called By]<UL><LI><a href="#[170]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;position_pid
 </UL>
 
-<P><STRONG><a name="[6f]"></a>PID_calc</STRONG> (Thumb, 3408 bytes, Stack size 680 bytes, pid_calc.o(i.PID_calc))
-<BR><BR>[Stack]<UL><LI>Max Depth = 884<LI>Call Chain = PID_calc &rArr; CanMotorBus_UpdateSelected &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
+<P><STRONG><a name="[6f]"></a>PID_calc</STRONG> (Thumb, 3426 bytes, Stack size 688 bytes, pid_calc.o(i.PID_calc))
+<BR><BR>[Stack]<UL><LI>Max Depth = 924<LI>Call Chain = PID_calc &rArr; CanMotorBus_UpdateSelected &rArr; guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 </UL>
 <BR>[Calls]<UL><LI><a href="#[165]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;DM4310_SetSpeedFilterAlpha
 <LI><a href="#[164]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;GM6020_SetSpeedFilterAlpha
@@ -2428,8 +2428,8 @@ Global Symbols
 <BR>[Called By]<UL><LI><a href="#[139]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_UARTEx_RxEventCallback
 </UL>
 
-<P><STRONG><a name="[70]"></a>VOFA_print</STRONG> (Thumb, 180 bytes, Stack size 304 bytes, vofa.o(i.VOFA_print))
-<BR><BR>[Stack]<UL><LI>Max Depth = 392<LI>Call Chain = VOFA_print &rArr; osDelayUntil &rArr; vTaskDelayUntil &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
+<P><STRONG><a name="[70]"></a>VOFA_print</STRONG> (Thumb, 152 bytes, Stack size 312 bytes, vofa.o(i.VOFA_print))
+<BR><BR>[Stack]<UL><LI>Max Depth = 400<LI>Call Chain = VOFA_print &rArr; osDelayUntil &rArr; vTaskDelayUntil &rArr; xTaskResumeAll &rArr; xTaskIncrementTick
 </UL>
 <BR>[Calls]<UL><LI><a href="#[191]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;VOFA_SendControlFrame
 <LI><a href="#[18f]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;VOFA_Init
@@ -2886,9 +2886,9 @@ Global Symbols
 <P><STRONG><a name="[1b2]"></a>vQueueAddToRegistry</STRONG> (Thumb, 34 bytes, Stack size 8 bytes, queue.o(i.vQueueAddToRegistry))
 <BR><BR>[Stack]<UL><LI>Max Depth = 8<LI>Call Chain = vQueueAddToRegistry
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvCheckForValidListAndQueue
-<LI><a href="#[159]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreNew
+<BR>[Called By]<UL><LI><a href="#[159]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreNew
 <LI><a href="#[15a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueueNew
+<LI><a href="#[1ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvCheckForValidListAndQueue
 </UL>
 
 <P><STRONG><a name="[1b7]"></a>vQueueDelete</STRONG> (Thumb, 46 bytes, Stack size 8 bytes, queue.o(i.vQueueDelete))
@@ -3054,9 +3054,9 @@ Global Symbols
 </UL>
 <BR>[Calls]<UL><LI><a href="#[1d0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvInitialiseNewQueue
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvCheckForValidListAndQueue
-<LI><a href="#[159]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreNew
+<BR>[Called By]<UL><LI><a href="#[159]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreNew
 <LI><a href="#[15a]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueueNew
+<LI><a href="#[1ca]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvCheckForValidListAndQueue
 <LI><a href="#[1b6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xQueueCreateCountingSemaphoreStatic
 </UL>
 
@@ -3086,10 +3086,10 @@ Global Symbols
 <LI><a href="#[1c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;vPortExitCritical
 <LI><a href="#[1c7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;vPortEnterCritical
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1d9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xTimerGenericCommand
-<LI><a href="#[1b9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreRelease
+<BR>[Called By]<UL><LI><a href="#[1b9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreRelease
 <LI><a href="#[f2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueuePut
 <LI><a href="#[159]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osSemaphoreNew
+<LI><a href="#[1d9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xTimerGenericCommand
 </UL>
 
 <P><STRONG><a name="[1b3]"></a>xQueueGenericSendFromISR</STRONG> (Thumb, 190 bytes, Stack size 32 bytes, queue.o(i.xQueueGenericSendFromISR))
@@ -3099,8 +3099,8 @@ Global Symbols
 <LI><a href="#[1f6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;vPortValidateInterruptPriority
 <LI><a href="#[1cc]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvCopyDataToQueue
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1d9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xTimerGenericCommand
-<LI><a href="#[f2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueuePut
+<BR>[Called By]<UL><LI><a href="#[f2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueuePut
+<LI><a href="#[1d9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xTimerGenericCommand
 </UL>
 
 <P><STRONG><a name="[1ba]"></a>xQueueGiveFromISR</STRONG> (Thumb, 156 bytes, Stack size 16 bytes, queue.o(i.xQueueGiveFromISR))
@@ -3128,8 +3128,8 @@ Global Symbols
 <LI><a href="#[1c9]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;vPortExitCritical
 <LI><a href="#[1c7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;vPortEnterCritical
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvProcessReceivedCommands
-<LI><a href="#[f3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueueGet
+<BR>[Called By]<UL><LI><a href="#[f3]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osMessageQueueGet
+<LI><a href="#[1d7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvProcessReceivedCommands
 </UL>
 
 <P><STRONG><a name="[1ae]"></a>xQueueReceiveFromISR</STRONG> (Thumb, 154 bytes, Stack size 32 bytes, queue.o(i.xQueueReceiveFromISR))
@@ -3195,9 +3195,9 @@ Global Symbols
 <BR>[Calls]<UL><LI><a href="#[1d2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvInitialiseNewTask
 <LI><a href="#[1c6]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvAddNewTaskToReadyList
 </UL>
-<BR>[Called By]<UL><LI><a href="#[1fd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xTimerCreateTimerTask
+<BR>[Called By]<UL><LI><a href="#[15b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osThreadNew
+<LI><a href="#[1fd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;xTimerCreateTimerTask
 <LI><a href="#[1ad]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;vTaskStartScheduler
-<LI><a href="#[15b]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osThreadNew
 </UL>
 
 <P><STRONG><a name="[185]"></a>xTaskGetSchedulerState</STRONG> (Thumb, 22 bytes, Stack size 0 bytes, tasks.o(i.xTaskGetSchedulerState))
@@ -3209,9 +3209,9 @@ Global Symbols
 </UL>
 
 <P><STRONG><a name="[1aa]"></a>xTaskGetTickCount</STRONG> (Thumb, 6 bytes, Stack size 0 bytes, tasks.o(i.xTaskGetTickCount))
-<BR><BR>[Called By]<UL><LI><a href="#[1d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvSampleTimeNow
-<LI><a href="#[166]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osKernelGetTickCount
+<BR><BR>[Called By]<UL><LI><a href="#[166]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osKernelGetTickCount
 <LI><a href="#[178]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;osDelayUntil
+<LI><a href="#[1d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;prvSampleTimeNow
 </UL>
 
 <P><STRONG><a name="[1ac]"></a>xTaskGetTickCountFromISR</STRONG> (Thumb, 12 bytes, Stack size 8 bytes, tasks.o(i.xTaskGetTickCountFromISR))
@@ -3486,7 +3486,7 @@ Local Symbols
 </UL>
 
 <P><STRONG><a name="[d9]"></a>guarded_send_commands</STRONG> (Thumb, 68 bytes, Stack size 16 bytes, can_motor_bus.o(i.guarded_send_commands))
-<BR><BR>[Stack]<UL><LI>Max Depth = 164<LI>Call Chain = guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
+<BR><BR>[Stack]<UL><LI>Max Depth = 196<LI>Call Chain = guarded_send_commands &rArr; send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 </UL>
 <BR>[Calls]<UL><LI><a href="#[1a5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;send_commands
 <LI><a href="#[d8]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;reset_all_control
@@ -3514,8 +3514,10 @@ Local Symbols
 <BR>[Called By]<UL><LI><a href="#[103]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;HAL_CAN_RxFifo0MsgPendingCallback
 </UL>
 
-<P><STRONG><a name="[1ef]"></a>record_gimbal_commands</STRONG> (Thumb, 22 bytes, Stack size 0 bytes, can_motor_bus.o(i.record_gimbal_commands))
-<BR><BR>[Called By]<UL><LI><a href="#[1a5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;send_commands
+<P><STRONG><a name="[1ef]"></a>record_motor_commands</STRONG> (Thumb, 32 bytes, Stack size 16 bytes, can_motor_bus.o(i.record_motor_commands))
+<BR><BR>[Stack]<UL><LI>Max Depth = 16<LI>Call Chain = record_motor_commands
+</UL>
+<BR>[Called By]<UL><LI><a href="#[1a5]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;send_commands
 </UL>
 
 <P><STRONG><a name="[10c]"></a>record_tx_complete</STRONG> (Thumb, 48 bytes, Stack size 0 bytes, can_motor_bus.o(i.record_tx_complete))
@@ -3600,15 +3602,15 @@ Local Symbols
 <LI><a href="#[dd]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;reset_gimbal_control
 </UL>
 
-<P><STRONG><a name="[1a5]"></a>send_commands</STRONG> (Thumb, 462 bytes, Stack size 88 bytes, can_motor_bus.o(i.send_commands))
-<BR><BR>[Stack]<UL><LI>Max Depth = 148<LI>Call Chain = send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
+<P><STRONG><a name="[1a5]"></a>send_commands</STRONG> (Thumb, 482 bytes, Stack size 120 bytes, can_motor_bus.o(i.send_commands))
+<BR><BR>[Stack]<UL><LI>Max Depth = 180<LI>Call Chain = send_commands &rArr; send_std &rArr; HAL_CAN_AddTxMessage
 </UL>
 <BR>[Calls]<UL><LI><a href="#[1ee]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;DM4310_PackCurrentCommand
 <LI><a href="#[1f0]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;tx_capacity_available
 <LI><a href="#[1f1]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;send_std
 <LI><a href="#[1ea]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;recover_stuck_tx_mailboxes
 <LI><a href="#[1e7]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;record_tx_diagnostics
-<LI><a href="#[1ef]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;record_gimbal_commands
+<LI><a href="#[1ef]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;record_motor_commands
 <LI><a href="#[1ed]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;pack_slot
 <LI><a href="#[1f2]">&gt;&gt;</a>&nbsp;&nbsp;&nbsp;accumulate_send_result
 </UL>

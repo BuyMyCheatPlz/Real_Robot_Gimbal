@@ -224,6 +224,19 @@ void VOFA_print(void *argument)
         channels[6] = snapshot.yaw_trajectory_speed_rad_s *
                       57.295779513082320876f;
         channels[7] = (float)snapshot.yaw_can_command;
+#elif (VOFA_LAUNCH_TUNING_MODE != 0U)
+        /* 发射拨盘调参页：
+         * I0=S1 模式(1保持/2连发/3单动)，I1=拨盘目标输出角，
+         * I2=拨盘实际输出角，I3=角度误差，I4=M2006 目标转速，
+         * I5=M2006 滤波实际转速，I6=最终 C610 电流命令，I7=实际累计发数。 */
+        channels[0] = (float)snapshot.m2006_feeder_switch;
+        channels[1] = snapshot.m2006_target_deg;
+        channels[2] = snapshot.m2006_actual_deg;
+        channels[3] = snapshot.m2006_error_deg;
+        channels[4] = snapshot.m2006_target_speed_rpm;
+        channels[5] = snapshot.m2006_filtered_speed_rpm;
+        channels[6] = (float)snapshot.m2006_can_command;
+        channels[7] = snapshot.m2006_actual_rounds;
 #else
         /* 默认综合状态页：
          * I2/I3=Yaw 目标/实际角；I4/I5=M2006 目标/实际输出角，连发时

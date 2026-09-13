@@ -15,7 +15,8 @@
 #define LAUNCH_TASK_WAIT_MS               2U
 #define VOFA_PERIOD_MS                     5U
 #define VOFA_PITCH_TUNING_MODE              0U
-#define VOFA_YAW_TUNING_MODE                1U
+#define VOFA_YAW_TUNING_MODE                0U
+#define VOFA_LAUNCH_TUNING_MODE             1U
 /* 0：正常调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
 #define VOFA_IMU_AXIS_DEBUG_MODE            0U
 #define ONLINE_PID_VALUE_MAX              100000.0f
@@ -279,9 +280,9 @@
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
  * 30° 阶跃整定组。上一组提高速度环 P 后出现满幅换向自激，当前
- * 回退到较软的速度环与低最小电流。最新 yaw.csv 超调已压住，但
- * 部分位置进入目标附近后回落到 ±0.2° 外。当前收紧 hold 进入误差，
- * 并继续小幅增加位置积分来增强目标附近回拉。
+ * 回退到较软的速度环与低最小电流。最新 yaw.csv 中部分位置 240 ms
+ * 附近仍有 0.3~0.45° 超调，当前小幅回收速度前馈与位置积分，减少
+ * 进入目标时的尾速和过目标后的持续推力。
  * 现场微调方向：
  *  超调>0.2°      → 减 YAW_VELOCITY_FF_GAIN / 加 YAW_ANGLE_KD /
  *                   减 YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2
@@ -289,7 +290,7 @@
  *                   YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 或增大速度环 P。
  *  末端小抖/噪声   → 略降 YAW_SPEED_KP 或回调滤波 alpha。 */
 #define YAW_ANGLE_KP_RAD_S_PER_RAD        5.20f
-#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.20f
+#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.18f
 /* 位置环 D 使用“每拍误差差量”语义 kd*(e[k]-e[k-1])（不除以 dt）。
  * 原 0.10 是按“每秒导数”写的等效值（≈速度阻尼 0.1），换算为每拍语义：
  * 0.10 / 0.001 = 100，行为不变。 */
@@ -300,7 +301,7 @@
 #define YAW_TRAJECTORY_MAX_SPEED_RAD_S    8.8f
 #define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   87.0f
 /* 1.0：直接使用规划速度做速度前馈。 */
-#define YAW_VELOCITY_FF_GAIN              0.90f
+#define YAW_VELOCITY_FF_GAIN              0.89f
 /* 可直接调节的力矩前馈：单位为 CAN 电流命令单位/输出轴 rad/s²。
  * 正值表示输出轴正加速度，控制器会应用 YAW_MOTOR_COMMAND_SIGN。 */
 #define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 15.0f
@@ -345,17 +346,16 @@
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
- * 电机轴转速环。当前先按稳定优先整定：旧 50/4 + 0.80 速度反馈过硬，
- * 在单动到位和弹丸卸载瞬间容易把速度量化/负载冲击放大成电流抖动。
- * 降低 P、I、输出限幅并增加速度滤波，先抑制抖动，再根据实弹数据逐步加快。 */
-#define LAUNCH_M2006_ID5_SPEED_KP         35.0f
-#define LAUNCH_M2006_ID5_SPEED_KI         2.0f
+ * 电机轴转速环。最新 2006.csv 显示保持段速度环正负满电流换向，说明零速
+ * 制动过硬。当前降低 P/I 与输出限幅，优先消除到位抖动。 */
+#define LAUNCH_M2006_ID5_SPEED_KP         24.0f
+#define LAUNCH_M2006_ID5_SPEED_KI         1.2f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   1500.0f
-#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     8000.0f
+#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   1000.0f
+#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     6500.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 0.0f
-/* 速度滤波 alpha：0.5 约 4 ms 等效时间常数，降低保持点附近的电流抖动。 */
-#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.50f
+/* 速度滤波 alpha 越小越稳。拨盘到位附近优先抑制速度噪声放大。 */
+#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.35f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
 
 /* ---------------- 拨弹 M2006 ID5 角度-速度双环 ----------------
@@ -369,13 +369,13 @@
 /* 连发档名义转速 4800rpm(20Hz 步进)；实际由角度环追目标决定，上限
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
-#define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 45.0f
-#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 80.0f   /* 输出°→电机rpm：40°误差→3200rpm */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   3200.0f /* 单动先按稳定优先，40°理论约75ms */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 4900.0f /* 连发档保留少量追相位余量 */
+#define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 60.0f
+#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 85.0f   /* 输出°→电机rpm：40°误差→3400rpm */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   3400.0f /* 单动补偿降内环后的速度损失 */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5600.0f /* 连发档提高追相位余量 */
 #define LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS   50U        /* 连发档步进周期 = 20Hz */
-#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    2.5f  /* 到位死区先放宽，避免目标点附近反复给速引起抖动 */
-#define M2006_STOP_DEADBAND_RPM                15.0f /* M2006 速度环断电阈值(rpm) */
+#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    0.8f  /* 单发必须走满 40°；松手后继续追目标，死区只留防微抖余量 */
+#define M2006_STOP_DEADBAND_RPM                35.0f /* M2006 零速断电阈值，避免低速反复刹车 */
 #define M2006_CMD_STALE_TIMEOUT_MS             100U  /* 命令保活：launch 卡死则断电 */
 
 #define TASK_DEG_TO_RAD                   0.017453292519943295f

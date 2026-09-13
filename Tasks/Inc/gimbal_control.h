@@ -79,7 +79,7 @@ typedef struct
 {
     float flywheel_speed_rpm;
     float feeder_speed_rpm;
-    uint16_t feeder_switch;   /* 原始 S1 开关值：1=保持 2=单步 3=连续 */
+    uint16_t feeder_switch;   /* 原始 S1 开关值：1=保持 2=连发 3=单动 */
     uint32_t timestamp_ms;
     uint32_t flags;
 } LaunchParameterUpdate_t;
@@ -159,8 +159,14 @@ typedef struct
     uint8_t yaw_hold_active;
     float m2006_target_deg;
     float m2006_actual_deg;
+    float m2006_error_deg;
+    float m2006_target_speed_rpm;
+    float m2006_filtered_speed_rpm;
+    float m2006_raw_speed_rpm;
     float m2006_target_rounds;   /* 累计指令发弹数 */
     float m2006_actual_rounds;   /* 累计实际发弹数(输出旋转/40°) */
+    int16_t m2006_can_command;
+    uint16_t m2006_feeder_switch;
     float sysid_time_s;          /* yaw 辨识运行时间(s) */
     float sysid_command;         /* 给 DM4310 的直通电流指令 */
     float sysid_speed_rpm;       /* DM4310 原始速度反馈 rpm(不滤波) */

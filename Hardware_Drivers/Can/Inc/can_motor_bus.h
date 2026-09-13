@@ -34,7 +34,10 @@ typedef struct
     uint16_t last_can2_rx_std_id;
     uint16_t consecutive_tx_failures;
     uint16_t recovery_zero_frames;
+    int16_t last_m3508_id2_command;
+    int16_t last_m3508_id3_command;
     int16_t last_gm6020_id2_command;
+    int16_t last_m2006_id5_command;
     int16_t last_dm4310_id1_command;
     uint8_t last_send_failure_mask;
     uint8_t last_send_busy_mask;

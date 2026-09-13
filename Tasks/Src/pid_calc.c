@@ -1296,6 +1296,8 @@ void PID_calc(void *argument)
                 bus_status.last_dm4310_id1_command;
             gimbal_control_state.yaw_torque_current_ma =
                 can2_dm4310_id1.torque_current_ma;
+            gimbal_control_state.m2006_can_command =
+                bus_status.last_m2006_id5_command;
             gimbal_control_state.yaw_encoder_count = can2_dm4310_id1.encoder;
             gimbal_control_state.yaw_motor_speed_rpm =
                 can2_dm4310_id1.speed_rpm;
