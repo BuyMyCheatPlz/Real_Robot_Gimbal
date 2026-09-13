@@ -223,7 +223,6 @@ Real_Robot_Gimbal/
 │     ├─ pid_calc.c         Pitch/Yaw 云台控制
 │     ├─ launch.c           M3508/M2006 发射机构速度控制
 │     └─ vofa.c             JustFloat 发送和 UART4 命令接收
-├─ Tests/                   宿主机（gcc）单元/回归测试，含 stubs 桩配置
 ├─ MDK-ARM/                 Keil MDK 工程
 └─ Real_Robot_Gimbal.ioc    STM32CubeMX 工程
 ```
@@ -430,32 +429,6 @@ YAW_KP_SPD=1
 5. 先确认编码器反馈方向与目标方向一致，再逐步增加 KP、KI、KD。
 6. 接通遥控器前确认 S1、S2 位于停止档（值 1）。
 7. 通过 VOFA 观察目标角度与实际角度，再进行在线调参。
-
-### 宿主机测试（`Tests/`）
-
-`Tests/` 下 13 个测试是纯主机侧（gcc + `assert`，不需要硬件）的单元/回归测试：
-姿态数学、BMI088 初始化与 DMA 安全、D-BUS 流解析、CAN 总线安全（邮箱反压/
-重试/bus-off/失联）、DM4310 协议与误差扩散量化、速度环抗积分饱和、在线调参
-解析、Pitch 接近与陷波、Yaw 保持与启动、默认参数与调参页开关。
-
-单条测试的编译方式（示例为默认参数测试）：
-
-```text
-gcc -std=c11 -w -ITasks/Inc -IHardware_Drivers/Can/Inc -IHardware_Drivers/Gm6020/Inc ^
-    -IHardware_Drivers/Dm4310/Inc -ITests/stubs ^
-    Tests/gimbal_default_authority_test.c Hardware_Drivers/Can/Src/motor_common.c ^
-    Hardware_Drivers/Gm6020/Src/gm6020.c Hardware_Drivers/Dm4310/Src/dm4310.c -o t.exe -lm
-```
-
-两点注意：
-
-- 包含路径顺序有意义。`Tests/stubs/config.h` 现在会先取 `Tasks/Inc/config.h`
-  再覆盖"主机测试必须固定"的几项，所以 `-ITasks/Inc` 在前表示用实车配置；
-  而 `can_motor_bus_safety_test` 依赖桩里的 `PITCH_STARTUP_MIN_VOLTAGE=8000`、
-  `CAN_COMMAND_PERIOD_MS=10` 等取值，需要把 `-ITests/stubs` 放最前。
-  两种顺序都试一遍最稳。
-- `gimbal_default_authority_test` 会 pin 住默认参数和 VOFA 调参页开关：改动
-  `config.h` 里被它断言的宏（包括开/关某个调参页）必须同步该测试。
 
 ## 十三、重要注意事项
 

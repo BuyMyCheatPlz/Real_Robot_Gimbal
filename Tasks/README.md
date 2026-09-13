@@ -263,33 +263,6 @@ Pitch 重力前馈参数：`PITCH_GRAVITY_FIT_MIN_DEG`、`PITCH_GRAVITY_FIT_MAX_
 Pitch 机械限位：`PITCH_LIMIT_MIN_RAD`（最高，IMU -139°）、
 `PITCH_LIMIT_MAX_RAD`（最低，IMU -64°），目标直接钳位到该区间。
 
-## 宿主机测试
-
-`Tests/` 下 13 个测试在主机上用 gcc 直接跑（`assert` 断言，无硬件依赖）：
-
-| 测试 | 覆盖内容 |
-|---|---|
-| `attitude_math_test` | 姿态角换算与归一化 |
-| `bmi088_accel_init_test` | BMI088 加速度计初始化时序 |
-| `bmi088_dma_safety_test` | BMI088 SPI/DMA 分段与超时恢复 |
-| `dbus_stream_test` | D-BUS 字节流解析与通道映射 |
-| `can_motor_bus_safety_test` | 邮箱反压、重试、bus-off、失联保护与命令帧打包 |
-| `dm4310_protocol_test` | DM4310 小端协议、槽位分配、限幅与误差扩散量化 |
-| `motor_pid_anti_windup_test` | 速度环积分抗饱和 |
-| `pid_parameter_test` | 在线调参命令解析 |
-| `pitch_approach_regression_test` | Pitch 接近段停车曲线 |
-| `pitch_notch_regression_test` | 位置 D 陷波器 |
-| `yaw_hold_regression_test` | Yaw 保持死区与目标捕获 |
-| `yaw_startup_regression_test` | Yaw 启动等待与授权 |
-| `gimbal_default_authority_test` | 默认整定参数、限幅关系与 VOFA 调参页开关 |
-
-包含路径顺序决定用哪份 `config.h`：`-ITasks/Inc` 在前 = 实车配置；把
-`-ITests/stubs` 放最前 = 桩配置（`Tests/stubs/config.h` 会先取实车
-`Tasks/Inc/config.h` 再覆盖主机测试固定项，如 `PITCH_STARTUP_MIN_VOLTAGE=8000`、
-`CAN_COMMAND_PERIOD_MS=10`）。`can_motor_bus_safety_test` 走桩配置，其余大多走
-实车配置，两种顺序各试一次最稳。改动 `config.h` 里被
-`gimbal_default_authority_test` 断言的宏（含开/关某个调参页）时必须同步该测试。
-
 ## 集中参数配置
 
 所有需要根据实车调整的任务参数集中在 `Tasks/Inc/config.h`，包括：
