@@ -19,12 +19,12 @@
 #define VOFA_LAUNCH_TUNING_MODE             0U
 /* 0：正常调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
 #define VOFA_IMU_AXIS_DEBUG_MODE            0U
-/* 0：正常调参通道；1：摩擦轮 M3508 阶跃调参页（整定目标 0→6000rpm/150ms）。
+/* 0：正常调参通道；1：摩擦轮 M3508 阶跃调参页（整定用，默认关闭）。
  * 通道：I0=固件侧时间轴(ms) I1/I2/I3=ID2 目标/原始/滤波转速 I4=ID2 最终 CAN
  * 电流命令 I5=ID2 实际转矩电流 I6=ID3 原始转速 I7=ID3 最终 CAN 电流命令。
  * vofa.c 是 #elif 链：本页与上面的 pitch/yaw/launch 调参位互斥，同一时刻只
- * 允许一个为 1。 */
-#define VOFA_LAUNCH_M3508_TUNING_MODE       1U
+ * 允许一个为 1；全关时走默认综合状态页。 */
+#define VOFA_LAUNCH_M3508_TUNING_MODE       0U
 #define ONLINE_PID_VALUE_MAX              100000.0f
 
 /* ---------------- 电机电流限幅 ---------------- */

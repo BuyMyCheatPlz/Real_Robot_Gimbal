@@ -30,10 +30,13 @@ static volatile uint8_t tx_busy;
 static volatile uint32_t vofa_tx_start_ms;
 static volatile uint32_t vofa_heartbeat;
 static volatile uint32_t vofa_tx_ok_count;
+#if (VOFA_LAUNCH_M3508_TUNING_MODE != 0U)
 /* 本次上电/初始化的起点，供 M3508 调参页输出固件侧精确时间轴。
  * 不要用上位机行号×VOFA_PERIOD_MS 推时间：2006.csv 已证明 VOFA 任务的实际
- * 发送间隔有 ±1ms 抖动，用 5ms 差分算速度会算出物理上不可能的值。 */
+ * 发送间隔有 ±1ms 抖动，用 5ms 差分算速度会算出物理上不可能的值。
+ * 该调参页关闭时整块编掉，避免 "set but never used" 警告。 */
 static uint32_t vofa_session_start_ms;
+#endif
 
 static HAL_StatusTypeDef start_rx_dma(void)
 {
@@ -56,7 +59,9 @@ HAL_StatusTypeDef VOFA_Init(UART_HandleTypeDef *huart)
     command_count = 0U;
     tx_busy = 0U;
     vofa_tx_start_ms = 0U;
+#if (VOFA_LAUNCH_M3508_TUNING_MODE != 0U)
     vofa_session_start_ms = HAL_GetTick();
+#endif
     return start_rx_dma();
 }
 
