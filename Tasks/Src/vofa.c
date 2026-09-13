@@ -209,6 +209,21 @@ void VOFA_print(void *argument)
         channels[5] = snapshot.pitch_feedback_output;
         channels[6] = snapshot.pitch_motor_feedforward;
         channels[7] = (float)snapshot.pitch_can_command;
+#elif (VOFA_YAW_TUNING_MODE != 0U)
+        /* Yaw 调参页：
+         * I2=Yaw 实际角，I3=轨迹角，I4=速度目标，I5=实际速度，
+         * I6=轨迹速度前馈，I7=最终 CAN 电流命令。 */
+        channels[0] = snapshot.yaw_target_rad * 57.295779513082320876f;
+        channels[1] = snapshot.yaw_encoder_rad * 57.295779513082320876f;
+        channels[2] = snapshot.yaw_imu_actual_rad * 57.295779513082320876f;
+        channels[3] = snapshot.yaw_profile_target_rad *
+                      57.295779513082320876f;
+        channels[4] = snapshot.yaw_speed_target_rad_s *
+                      57.295779513082320876f;
+        channels[5] = snapshot.yaw_speed_rad_s * 57.295779513082320876f;
+        channels[6] = snapshot.yaw_trajectory_speed_rad_s *
+                      57.295779513082320876f;
+        channels[7] = (float)snapshot.yaw_can_command;
 #else
         /* 默认综合状态页：
          * I2/I3=Yaw 目标/实际角；I4/I5=M2006 目标/实际输出角，连发时

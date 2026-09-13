@@ -14,8 +14,9 @@
 #define LAUNCH_REMOTE_TIMEOUT_MS          100U
 #define LAUNCH_TASK_WAIT_MS               2U
 #define VOFA_PERIOD_MS                     5U
-#define VOFA_PITCH_TUNING_MODE              1U
-/* 0：正常 Pitch 调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
+#define VOFA_PITCH_TUNING_MODE              0U
+#define VOFA_YAW_TUNING_MODE                1U
+/* 0：正常调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
 #define VOFA_IMU_AXIS_DEBUG_MODE            0U
 #define ONLINE_PID_VALUE_MAX              100000.0f
 
@@ -81,14 +82,14 @@
  * 同向，且编码器到 IMU 坐标符号为 -1，则电机速度反馈仍需乘该组合符号。 */
 #define PITCH_ROLL_RATE_TO_SPEED_SIGN      (PITCH_MOTOR_SIGN * PITCH_ENCODER_TO_IMU_SIGN)
 #define YAW_ENCODER_LPF_ALPHA             0.40f   /* 位置反馈滞后↓(30°快移用) */
-#define YAW_SPEED_LPF_ALPHA               0.50f   /* 速度反馈滞后↓(30°快移用) */
+#define YAW_SPEED_LPF_ALPHA               0.40f   /* 速度反馈抖动↓，兼顾 yaw 200ms 阶跃 */
 /* IMU Yaw 是当前的位置环测量值。进入位置 PID 前先滤波；电机编码器仍作为
  * 内层速度反馈来源。 */
 #define YAW_IMU_POSITION_LPF_ALPHA         0.02f
 /* 最终目标保持使用滞回，轨迹运动期间不启用。退出阈值满足不超过 0.2° 的精度要求。 */
-#define YAW_HOLD_ENTER_ERROR_RAD           (0.10f * TASK_DEG_TO_RAD)
+#define YAW_HOLD_ENTER_ERROR_RAD           (0.15f * TASK_DEG_TO_RAD)
 #define YAW_HOLD_EXIT_ERROR_RAD            (0.20f * TASK_DEG_TO_RAD)
-#define YAW_HOLD_ENTER_SPEED_RPM            0.20f
+#define YAW_HOLD_ENTER_SPEED_RPM            0.35f
 #define YAW_PROFILE_SETTLED_POSITION_RAD   (0.01f * TASK_DEG_TO_RAD)
 #define YAW_PROFILE_SETTLED_SPEED_RAD_S     0.005f
 /* 在新鲜电机反馈确认输出轴静止前，保持 Yaw 断电；只有经过此窗口后才捕获保持目标。
@@ -161,7 +162,7 @@
 /* 小误差低速静态纠偏：死区外连续增加补偿，误差超过 MAX 后保持端点值，
  * 不再在 MAX 边界突然撤掉。输出在电机指令域。 */
 #define PITCH_STATIC_ERROR_COMP_ENABLE      1U
-#define PITCH_STATIC_ERROR_COMP_DEADBAND_DEG 0.10f
+#define PITCH_STATIC_ERROR_COMP_DEADBAND_DEG 0.08f
 #define PITCH_STATIC_ERROR_COMP_MAX_ERROR_DEG 1.0f
 #define PITCH_STATIC_ERROR_COMP_FULL_SPEED_DEG_S 1.0f
 #define PITCH_STATIC_ERROR_COMP_FADE_SPEED_DEG_S 8.0f
@@ -172,8 +173,8 @@
 #define PITCH_STATIC_ERROR_COMP_LOW_ANGLE_TARGET_MAX_DEG (-45.0f)
 #define PITCH_STATIC_ERROR_COMP_LOW_ANGLE_VOLT_PER_DEG 5000.0f
 #define PITCH_STATIC_ERROR_COMP_LOW_ANGLE_LIMIT       1000.0f
-/* 20000/s 等于每个 1 ms 控制周期最多变化 20 个电压指令单位。 */
-#define PITCH_STATIC_ERROR_COMP_SLEW_VOLT_PER_S      20000.0f
+/* 40000/s 等于每个 1 ms 控制周期最多变化 40 个电压指令单位。 */
+#define PITCH_STATIC_ERROR_COMP_SLEW_VOLT_PER_S      40000.0f
 /* 目标大步进会让误差 D 吃到目标阶跃，并把上一角度的积分带到下一角度。
  * 超过该阈值时重置 Pitch 位置环状态，仅清位置环 I/D 记忆，不改速度环和前馈。 */
 #define PITCH_POSITION_STEP_RESET_RAD       (5.0f * TASK_DEG_TO_RAD)
@@ -192,16 +193,17 @@
 #define PITCH_APPROACH_MIN_SPEED_FADE_ERROR_DEG 0.6f
 #define PITCH_APPROACH_MIN_SPEED_NEAR_DEG_S  3.0f
 /* 三类运动使用不同停车模型：低角度向上保留已验证的 0.60 衰减；高角度
- * 向上实际制动更强，因此提高等效减速度；向下增加控制响应距离。 */
+ * 向上实际制动更强，因此提高等效减速度。普通下降与高角度上升都提前收速，
+ * 分别压低 0→-30 的越线回摆和 -30→0 的末段静差。 */
 #define PITCH_APPROACH_LOW_ANGLE_SCALE_ENABLE 1U
 #define PITCH_APPROACH_LOW_ANGLE_TARGET_MAX_DEG (-25.0f)
 #define PITCH_APPROACH_LOW_ANGLE_SCALE          0.60f
 #define PITCH_APPROACH_LOW_TARGET_DOWN_MAX_DEG (-45.0f)
-#define PITCH_APPROACH_DOWN_BRAKE_DELAY_S        0.020f
+#define PITCH_APPROACH_DOWN_BRAKE_DELAY_S        0.030f
 #define PITCH_APPROACH_LOW_TARGET_DOWN_BRAKE_DELAY_S 0.030f
 #define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_DELAY_S 0.030f
 #define PITCH_APPROACH_HIGH_ANGLE_UP_ACCEL_SCALE  2.00f
-#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_DELAY_S 0.040f
+#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_DELAY_S 0.055f
 /* 速度目标只向目标方向收缩，不生成反向速度。停车曲线计入控制响应延迟：
  * distance = |v|*delay + v^2/(2*a)。动态制动前馈与速度 PI 重复使用同一
  * 超速量，实测会造成到位前反转，因此关闭，仅由速度 PI 执行制动。 */
@@ -276,39 +278,39 @@
 #define PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2  8.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
- * 30° 阶跃(≤200ms、超调≤0.2°)整定组。依据辨识：电流→速度≈积分器(自由轴)，
- * 速度环 P 即稳定；轨迹(高速/大加速度)+ 速度/加速度前馈负责 200ms 快速到位，
- * 位置环做末端修正与防超调。
+ * 30° 阶跃整定组。最新 yaw.csv 首次进入目标约 175 ms，但 200 ms 已
+ * 越线 0.6~1.2°。当前回收一部分轨迹/前馈能量，并适度提高 D，让穿越
+ * 前制动更早，目标是保住 200 ms 内进入同时压低超调。
  * 现场微调方向：
  *  超调>0.2°      → 减 YAW_VELOCITY_FF_GAIN / 加 YAW_ANGLE_KD /
  *                   减 YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2
- *  到位偏慢/滞后大 → 加 YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2(先看电流是否顶到
- *                   16384，若顶到则只能降 YAW_TRAJECTORY_MAX_ACCEL_RAD_S2 放慢)
+ *  到位偏慢/滞后大 → 先看减速段 I7 是否提前反向；若提前反向，减小
+ *                   YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 或增大速度环 P。
  *  末端小抖/噪声   → 略降 YAW_SPEED_KP 或回调滤波 alpha。 */
-#define YAW_ANGLE_KP_RAD_S_PER_RAD        2.00f
-#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.02f
+#define YAW_ANGLE_KP_RAD_S_PER_RAD        5.20f
+#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.12f
 /* 位置环 D 使用“每拍误差差量”语义 kd*(e[k]-e[k-1])（不除以 dt）。
  * 原 0.10 是按“每秒导数”写的等效值（≈速度阻尼 0.1），换算为每拍语义：
  * 0.10 / 0.001 = 100，行为不变。 */
-#define YAW_ANGLE_KD_RAD_S2_PER_RAD       100.0f
-#define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    0.04f
+#define YAW_ANGLE_KD_RAD_S2_PER_RAD        75.0f
+#define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    0.12f
 #define YAW_MAX_SPEED_RAD_S               7.0f
 /* Yaw 目标轨迹，轨迹单位为输出轴弧度。 */
-#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    6.5f
-#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   60.0f
+#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    8.6f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   88.0f
 /* 1.0：直接使用规划速度做速度前馈。 */
-#define YAW_VELOCITY_FF_GAIN              1.00f
+#define YAW_VELOCITY_FF_GAIN              0.90f
 /* 可直接调节的力矩前馈：单位为 CAN 电流命令单位/输出轴 rad/s²。
  * 正值表示输出轴正加速度，控制器会应用 YAW_MOTOR_COMMAND_SIGN。 */
-#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 65.0f
+#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 18.0f
 #define YAW_ACCELERATION_FF_CURRENT_LIMIT  16384.0f
-#define YAW_SPEED_KP_CURRENT_PER_RPM       100.0f
+#define YAW_SPEED_KP_CURRENT_PER_RPM       225.0f
 #define YAW_SPEED_KI_CURRENT_PER_RPM_S     15.0f
 #define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
 #define YAW_SPEED_INTEGRAL_LIMIT_CURRENT  16384.0f
 /* 克服 DM4310 与机构静摩擦的最小启动电流；目标速度为零时不生效。 */
-#define YAW_STARTUP_SPEED_THRESHOLD_RPM    0.50f
-#define YAW_STARTUP_MIN_CURRENT             500.0f
+#define YAW_STARTUP_SPEED_THRESHOLD_RPM    0.20f
+#define YAW_STARTUP_MIN_CURRENT             280.0f
 /* DM4310 使用小端命令格式；1000 发送为 E8 03，并按 1000 接收，而不是
  * 字节交换后得到的错误值。 */
 #define YAW_CURRENT_OUTPUT_LIMIT          16384.0f
@@ -342,18 +344,17 @@
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
- * 电机轴转速环。输出限幅放满 10A：推弹瞬间负载大，8A 不够顶会掉速。
- * 之前 KP=10/KI=2 偏保守导致"实际比目标少 1~2 颗"(连发稳态掉速+起步滞后)，
- * 这里把 KP 提到 50、KI 提到 4、积分限幅 2000→3000，让速度环更跟手、稳态误差更小。
- * 注意别再加太多，否则弹丸顶开后积分+饱和 P 会把电机猛冲过 4800 撞下一颗弹。 */
-#define LAUNCH_M2006_ID5_SPEED_KP         50.0f
-#define LAUNCH_M2006_ID5_SPEED_KI         4.0f
+ * 电机轴转速环。当前先按稳定优先整定：旧 50/4 + 0.80 速度反馈过硬，
+ * 在单动到位和弹丸卸载瞬间容易把速度量化/负载冲击放大成电流抖动。
+ * 降低 P、I、输出限幅并增加速度滤波，先抑制抖动，再根据实弹数据逐步加快。 */
+#define LAUNCH_M2006_ID5_SPEED_KP         35.0f
+#define LAUNCH_M2006_ID5_SPEED_KI         2.0f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
-#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   3000.0f
-#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     10000.0f
+#define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   1500.0f
+#define LAUNCH_M2006_ID5_OUTPUT_LIMIT     8000.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 0.0f
-/* 速度滤波 alpha：0.8 滞后小(~2.5ms)，避免快电机刹车前冲过指令速度。 */
-#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.80f
+/* 速度滤波 alpha：0.5 约 4 ms 等效时间常数，降低保持点附近的电流抖动。 */
+#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.50f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
 
 /* ---------------- 拨弹 M2006 ID5 角度-速度双环 ----------------
@@ -367,13 +368,13 @@
 /* 连发档名义转速 4800rpm(20Hz 步进)；实际由角度环追目标决定，上限
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
-#define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 60.0f
-#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 120.0f  /* 输出°→电机rpm：40°误差→4800rpm */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   4800.0f /* 单动接近速度：与连发同速，40°理论约50ms */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5000.0f /* 连发档限速：需追 4800rpm 目标 */
+#define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 45.0f
+#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 80.0f   /* 输出°→电机rpm：40°误差→3200rpm */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   3200.0f /* 单动先按稳定优先，40°理论约75ms */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 4900.0f /* 连发档保留少量追相位余量 */
 #define LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS   50U        /* 连发档步进周期 = 20Hz */
-#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    1.5f  /* 到位死区：4°太大每发都短2~3°，累积成"少1~2颗"；收到1.5°让拨盘转到位 */
-#define M2006_STOP_DEADBAND_RPM                5.0f  /* M2006 速度环断电阈值(rpm) */
+#define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    2.5f  /* 到位死区先放宽，避免目标点附近反复给速引起抖动 */
+#define M2006_STOP_DEADBAND_RPM                15.0f /* M2006 速度环断电阈值(rpm) */
 #define M2006_CMD_STALE_TIMEOUT_MS             100U  /* 命令保活：launch 卡死则断电 */
 
 #define TASK_DEG_TO_RAD                   0.017453292519943295f
