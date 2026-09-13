@@ -16,9 +16,15 @@
 #define VOFA_PERIOD_MS                     5U
 #define VOFA_PITCH_TUNING_MODE              0U
 #define VOFA_YAW_TUNING_MODE                0U
-#define VOFA_LAUNCH_TUNING_MODE             1U
+#define VOFA_LAUNCH_TUNING_MODE             0U
 /* 0：正常调参通道；1：临时打印 BMI088 三轴方向诊断通道。 */
 #define VOFA_IMU_AXIS_DEBUG_MODE            0U
+/* 0：正常调参通道；1：摩擦轮 M3508 阶跃调参页（整定目标 0→6000rpm/150ms）。
+ * 通道：I0=固件侧时间轴(ms) I1/I2/I3=ID2 目标/原始/滤波转速 I4=ID2 最终 CAN
+ * 电流命令 I5=ID2 实际转矩电流 I6=ID3 原始转速 I7=ID3 最终 CAN 电流命令。
+ * vofa.c 是 #elif 链：本页与上面的 pitch/yaw/launch 调参位互斥，同一时刻只
+ * 允许一个为 1。 */
+#define VOFA_LAUNCH_M3508_TUNING_MODE       1U
 #define ONLINE_PID_VALUE_MAX              100000.0f
 
 /* ---------------- 电机电流限幅 ---------------- */
@@ -325,24 +331,45 @@
 /* 0：Yaw 使用多圈编码器连续角度，不限制累计目标角。 */
 #define YAW_SOFT_LIMIT_DEG                  0.0f
 
-/* ---------------- 发射 M3508 ID2 速度环 PID ---------------- */
-#define LAUNCH_M3508_ID2_SPEED_KP         15.0f
-#define LAUNCH_M3508_ID2_SPEED_KI         0.5f
-#define LAUNCH_M3508_ID2_SPEED_KD         0.0f
+/* ---------------- 发射 M3508 ID2 速度环 PID ----------------
+ * 阶跃指标：遥控 S2 从 1 拨到 3(0→6000rpm)，从接到指令到稳态 ≤150ms。
+ * 3508.csv(2026-09-13 18:35) 实测旧参数(KP15/KI0.5/KD0/alpha0.20/分离1000)：
+ * 90% 上升 85ms、峰值 6325rpm(+5.4%)@110ms、稳态 210ms。用同一份数据辨识：
+ *  1) 被控对象 a = 4.98·I_实际 + 187 rpm/s(29 点最小二乘)，即 k_i=4.98 rpm/s
+ *     per 电流单位；满命令 16384 时实际电流只有 ~14.7k(0rpm) 并随转速升到
+ *     ~10.2k@5000rpm(反电动势/电调限流)；6000rpm 稳态约需 400 单位。
+ *  2) 命令→实际转矩电流约 8~9ms 滞后：拿 I4(命令) 拟合加速度残差 9548，
+ *     换 I5(实际电流) 在 lag=0 拟合残差 6360，说明是电调电流环跟不上命令。
+ *  3) 那 5.4% 过冲 ≈ 上升期加速度 70000rpm/s × 低通 τ(alpha=0.20 → 5ms)。
+ * 即瓶颈是"环路总延时 ≈ 电调 8ms + 低通 5ms"。纯 P 环只能靠降增益换稳定
+ * (KD=0 时最坏 214ms，达不到 150ms)，对策是去掉低通滞后 + 加微分超前。
+ *  KD 是"每拍误差差量"语义 kd·(e[k]-e[k-1])：1ms 周期下等效微分时间
+ *  Td = kd·dt/KP = 100×0.001/18 ≈ 5.6ms，切勿按"每秒导数"当 100 用。
+ *  KI 原 0.5 在该量纲下等于没有(补 400 单位要几十秒)，提到 20 才能让
+ *  ±0.5%(30rpm) 的收尾也进 150ms。
+ * 仿真(延时 6/8/10ms × 负载 300/400/600，共 9 工况)最坏：±1% 稳态 136ms、
+ * ±0.5% 稳态 141ms、过冲 +0.21%、静差 ≤15rpm；旧参数同口径 164~312ms、
+ * 过冲 +2.4~5.7%。
+ * 代价：KD 会把转速反馈噪声放大成电流纹波(反馈 ±5rpm 时命令纹波 ~1300/16384)。
+ * 若台架看到保持段电流持续 ±2000 以上来回跳，把 KD 降到 60(最坏 151ms)。 */
+#define LAUNCH_M3508_ID2_SPEED_KP         18.0f
+#define LAUNCH_M3508_ID2_SPEED_KI         20.0f
+#define LAUNCH_M3508_ID2_SPEED_KD         100.0f
 #define LAUNCH_M3508_ID2_INTEGRAL_LIMIT   16384.0f
 #define LAUNCH_M3508_ID2_OUTPUT_LIMIT     16384.0f
 #define LAUNCH_M3508_ID2_INTEGRAL_SEPARATION_RPM 1000.0f
-#define LAUNCH_M3508_ID2_SPEED_LPF_ALPHA  0.20f
+#define LAUNCH_M3508_ID2_SPEED_LPF_ALPHA  0.50f
 #define LAUNCH_M3508_ID2_DIRECTION        1.0f
 
-/* ---------------- 发射 M3508 ID3 速度环 PID ---------------- */
-#define LAUNCH_M3508_ID3_SPEED_KP         15.0f
-#define LAUNCH_M3508_ID3_SPEED_KI         0.5f
-#define LAUNCH_M3508_ID3_SPEED_KD         0.0f
+/* ---------------- 发射 M3508 ID3 速度环 PID ----------------
+ * 与 ID2 同参数(整定依据见上)，只有方向相反。 */
+#define LAUNCH_M3508_ID3_SPEED_KP         18.0f
+#define LAUNCH_M3508_ID3_SPEED_KI         20.0f
+#define LAUNCH_M3508_ID3_SPEED_KD         100.0f
 #define LAUNCH_M3508_ID3_INTEGRAL_LIMIT   16384.0f  
 #define LAUNCH_M3508_ID3_OUTPUT_LIMIT     16384.0f
 #define LAUNCH_M3508_ID3_INTEGRAL_SEPARATION_RPM 1000.0f
-#define LAUNCH_M3508_ID3_SPEED_LPF_ALPHA  0.20f
+#define LAUNCH_M3508_ID3_SPEED_LPF_ALPHA  0.50f
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------

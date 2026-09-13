@@ -309,6 +309,12 @@ S2 使用三档离散映射控制摩擦轮转速：
 #define LAUNCH_M3508_TARGET_MAX_SPEED_RPM 6000.0f
 ```
 
+两颗 M3508 速度环按"0→6000 rpm 阶跃 ≤150 ms（从接到指令到稳态）"整定，当前
+KP=18 / KI=20 / KD=100 / 速度低通 alpha=0.50 / 积分分离 1000 rpm。KD 是
+`kd·(e[k]-e[k-1])` 每拍差量语义（1 ms 周期下等效微分时间 ≈5.6 ms），不是每秒
+导数。整定依据（3508.csv 实测 + 被控对象辨识：k_i=4.98 rpm/s per 电流单位、
+电调命令→力矩约 8~9 ms 滞后、过冲来自低通滞后）写在 `config.h` 对应宏上方。
+
 M2006 拨弹已改为角度步进控制（不是目标转速）：步进角度 40°、连发频率 20 Hz、
 减速比与角度/速度环参数见 `config.h` 的 `M2006_*` / `LAUNCH_M2006_*` 宏。
 
@@ -332,9 +338,11 @@ M2006 只有在线时才会运行。Launch 任务还会独立检查 100 ms 遥�
 
 ## 九、VOFA JustFloat 与在线调参
 
-UART4 每 5 ms 按绝对周期发送 8 个小端 float，随后发送帧尾 `00 00 80 7F`。当前重新打开
-`VOFA_LAUNCH_TUNING_MODE=1` 用于拨盘单发/连发调参；需要 Yaw 阶跃调参时再切到
-`VOFA_YAW_TUNING_MODE=1`。关闭专用调参页后默认综合页为 Pitch/Yaw 角度、M2006 目标/实际角和 M3508 转速。完整通道映射、命令清单和调试/操作宏见
+UART4 每 5 ms 按绝对周期发送 8 个小端 float，随后发送帧尾 `00 00 80 7F`。当前打开
+`VOFA_LAUNCH_M3508_TUNING_MODE=1` 用于摩擦轮 M3508 阶跃调参（目标 0→6000 rpm/150 ms），
+通道为固件时间轴、ID2 目标/原始/滤波转速、ID2 最终 CAN 电流命令与实际转矩电流、
+ID3 原始转速与最终命令；拨盘调参切 `VOFA_LAUNCH_TUNING_MODE=1`，Yaw 阶跃调参切
+`VOFA_YAW_TUNING_MODE=1`（三者互斥）。关闭专用调参页后默认综合页为 Pitch/Yaw 角度、M2006 目标/实际角和 M3508 转速。完整通道映射、命令清单和调试/操作宏见
 [Tasks/README.md](Tasks/README.md)。
 
 UART4 同时接收以回车或换行结尾的 ASCII 命令：

@@ -22,7 +22,9 @@ int main(void)
     assert(VOFA_PERIOD_MS == 5U);
     assert(VOFA_PITCH_TUNING_MODE == 0U);
     assert(VOFA_YAW_TUNING_MODE == 0U);
-    assert(VOFA_LAUNCH_TUNING_MODE == 1U);
+    /* VOFA 调参页开关：当前开 M3508 阶跃调参页，M2006 拨盘调参页关闭。 */
+    assert(VOFA_LAUNCH_TUNING_MODE == 0U);
+    assert(VOFA_LAUNCH_M3508_TUNING_MODE == 1U);
     assert(VOFA_IMU_AXIS_DEBUG_MODE == 0U);
 
     GM6020_Init(&pitch, 2U, PITCH_SPEED_KP, PITCH_SPEED_KI);

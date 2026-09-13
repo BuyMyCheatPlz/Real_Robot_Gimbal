@@ -30,6 +30,10 @@ static volatile uint8_t tx_busy;
 static volatile uint32_t vofa_tx_start_ms;
 static volatile uint32_t vofa_heartbeat;
 static volatile uint32_t vofa_tx_ok_count;
+/* 本次上电/初始化的起点，供 M3508 调参页输出固件侧精确时间轴。
+ * 不要用上位机行号×VOFA_PERIOD_MS 推时间：2006.csv 已证明 VOFA 任务的实际
+ * 发送间隔有 ±1ms 抖动，用 5ms 差分算速度会算出物理上不可能的值。 */
+static uint32_t vofa_session_start_ms;
 
 static HAL_StatusTypeDef start_rx_dma(void)
 {
@@ -52,6 +56,7 @@ HAL_StatusTypeDef VOFA_Init(UART_HandleTypeDef *huart)
     command_count = 0U;
     tx_busy = 0U;
     vofa_tx_start_ms = 0U;
+    vofa_session_start_ms = HAL_GetTick();
     return start_rx_dma();
 }
 
@@ -237,6 +242,31 @@ void VOFA_print(void *argument)
         channels[5] = snapshot.m2006_filtered_speed_rpm;
         channels[6] = (float)snapshot.m2006_can_command;
         channels[7] = snapshot.m2006_actual_rounds;
+#elif (VOFA_LAUNCH_M3508_TUNING_MODE != 0U)
+        /* 摩擦轮 M3508 阶跃调参页。整定目标：遥控 S2 从 1 拨到 3 时，
+         * 目标 0→6000rpm(LAUNCH_M3508_TARGET_MAX_SPEED_RPM) 的阶跃要在
+         * 150ms 内完成。
+         * 直接读电机/总线状态，只读不写，不碰任何控制逻辑，也不调用 PID
+         * (调用会推进积分器)。I4/I7 取总线里"真正下发"的命令，已含
+         * LAUNCH_MOTOR_OUTPUT_ENABLE 与 YAW_COMMISSIONING_MODE 门控。
+         * 台架判读：
+         *   看 I2 阶跃上升时间；I2 与 I3 的差 = 速度低通的滞后代价；
+         *   I4 长期贴着 ±16384 = 转矩/电流受限(不是增益问题)；
+         *   I5 明显小于 I4 = C620 内部限流或反电动势压顶；
+         *   I1 到 6000 后 I2 有静差 = 积分(KI/积分分离)没补上；
+         *   I6/I7 是另一颗轮子，用来确认镜像方向与两颗轮子一致性。 */
+        {
+            CanMotorBusStatus_t bus_status;
+            CanMotorBus_GetStatus(&bus_status);
+            channels[0] = (float)(HAL_GetTick() - vofa_session_start_ms);
+            channels[1] = can1_m3508_id2.target_speed_rpm;
+            channels[2] = (float)can1_m3508_id2.feedback.speed_rpm;
+            channels[3] = can1_m3508_id2.filtered_speed_rpm;
+            channels[4] = (float)bus_status.last_m3508_id2_command;
+            channels[5] = (float)can1_m3508_id2.feedback.current;
+            channels[6] = (float)can1_m3508_id3.feedback.speed_rpm;
+            channels[7] = (float)bus_status.last_m3508_id3_command;
+        }
 #else
         /* 默认综合状态页：
          * I2/I3=Yaw 目标/实际角；I4/I5=M2006 目标/实际输出角，连发时
