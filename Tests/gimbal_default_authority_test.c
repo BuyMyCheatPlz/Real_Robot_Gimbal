@@ -184,17 +184,17 @@ int main(void)
      * 轨迹和 1.0 电流/rpm 路径只能产生约 5 个电流计数。 */
     assert(YAW_MAX_SPEED_RAD_S >= 0.5f);
     assert(YAW_TRAJECTORY_MAX_SPEED_RAD_S >= 0.4f);
-    assert(YAW_TRAJECTORY_MAX_SPEED_RAD_S == 8.6f);
-    assert(YAW_TRAJECTORY_MAX_ACCEL_RAD_S2 == 88.0f);
+    assert(YAW_TRAJECTORY_MAX_SPEED_RAD_S == 8.8f);
+    assert(YAW_TRAJECTORY_MAX_ACCEL_RAD_S2 == 87.0f);
     assert(YAW_ANGLE_KP_RAD_S_PER_RAD == 5.20f);
-    assert(YAW_ANGLE_KI_RAD_S_PER_RAD_S == 0.12f);
-    assert(YAW_ANGLE_KD_RAD_S2_PER_RAD == 75.0f);
+    assert(YAW_ANGLE_KI_RAD_S_PER_RAD_S == 0.20f);
+    assert(YAW_ANGLE_KD_RAD_S2_PER_RAD == 88.0f);
     assert(YAW_ANGLE_INTEGRAL_LIMIT_RAD_S == 0.12f);
-    assert(YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 == 18.0f);
+    assert(YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 == 15.0f);
     assert(YAW_VELOCITY_FF_GAIN == 0.90f);
-    assert(YAW_SPEED_KP_CURRENT_PER_RPM == 225.0f);
+    assert(YAW_SPEED_KP_CURRENT_PER_RPM == 190.0f);
     assert(YAW_STARTUP_SPEED_THRESHOLD_RPM == 0.20f);
-    assert(YAW_STARTUP_MIN_CURRENT == 280.0f);
+    assert(YAW_STARTUP_MIN_CURRENT == 80.0f);
     assert(YAW_DIRECTION_TEST_MAX_CURRENT <= DM4310_CURRENT_COMMAND_LIMIT);
     /* DM4310 电流命令是有符号 16 位协议值；这里检查配置的协议安全上限，
      * 不是上面故意设小的方向测试电流。 */

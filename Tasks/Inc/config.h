@@ -87,7 +87,7 @@
  * 内层速度反馈来源。 */
 #define YAW_IMU_POSITION_LPF_ALPHA         0.02f
 /* 最终目标保持使用滞回，轨迹运动期间不启用。退出阈值满足不超过 0.2° 的精度要求。 */
-#define YAW_HOLD_ENTER_ERROR_RAD           (0.15f * TASK_DEG_TO_RAD)
+#define YAW_HOLD_ENTER_ERROR_RAD           (0.05f * TASK_DEG_TO_RAD)
 #define YAW_HOLD_EXIT_ERROR_RAD            (0.20f * TASK_DEG_TO_RAD)
 #define YAW_HOLD_ENTER_SPEED_RPM            0.35f
 #define YAW_PROFILE_SETTLED_POSITION_RAD   (0.01f * TASK_DEG_TO_RAD)
@@ -278,9 +278,10 @@
 #define PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2  8.0f
 
 /* ---------------- Yaw：DM4310 外位置环 + 软件速度环 ----------------
- * 30° 阶跃整定组。最新 yaw.csv 首次进入目标约 175 ms，但 200 ms 已
- * 越线 0.6~1.2°。当前回收一部分轨迹/前馈能量，并适度提高 D，让穿越
- * 前制动更早，目标是保住 200 ms 内进入同时压低超调。
+ * 30° 阶跃整定组。上一组提高速度环 P 后出现满幅换向自激，当前
+ * 回退到较软的速度环与低最小电流。最新 yaw.csv 超调已压住，但
+ * 部分位置进入目标附近后回落到 ±0.2° 外。当前收紧 hold 进入误差，
+ * 并继续小幅增加位置积分来增强目标附近回拉。
  * 现场微调方向：
  *  超调>0.2°      → 减 YAW_VELOCITY_FF_GAIN / 加 YAW_ANGLE_KD /
  *                   减 YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2
@@ -288,29 +289,29 @@
  *                   YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 或增大速度环 P。
  *  末端小抖/噪声   → 略降 YAW_SPEED_KP 或回调滤波 alpha。 */
 #define YAW_ANGLE_KP_RAD_S_PER_RAD        5.20f
-#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.12f
+#define YAW_ANGLE_KI_RAD_S_PER_RAD_S      0.20f
 /* 位置环 D 使用“每拍误差差量”语义 kd*(e[k]-e[k-1])（不除以 dt）。
  * 原 0.10 是按“每秒导数”写的等效值（≈速度阻尼 0.1），换算为每拍语义：
  * 0.10 / 0.001 = 100，行为不变。 */
-#define YAW_ANGLE_KD_RAD_S2_PER_RAD        75.0f
+#define YAW_ANGLE_KD_RAD_S2_PER_RAD        88.0f
 #define YAW_ANGLE_INTEGRAL_LIMIT_RAD_S    0.12f
 #define YAW_MAX_SPEED_RAD_S               7.0f
 /* Yaw 目标轨迹，轨迹单位为输出轴弧度。 */
-#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    8.6f
-#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   88.0f
+#define YAW_TRAJECTORY_MAX_SPEED_RAD_S    8.8f
+#define YAW_TRAJECTORY_MAX_ACCEL_RAD_S2   87.0f
 /* 1.0：直接使用规划速度做速度前馈。 */
 #define YAW_VELOCITY_FF_GAIN              0.90f
 /* 可直接调节的力矩前馈：单位为 CAN 电流命令单位/输出轴 rad/s²。
  * 正值表示输出轴正加速度，控制器会应用 YAW_MOTOR_COMMAND_SIGN。 */
-#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 18.0f
+#define YAW_ACCELERATION_FF_CURRENT_PER_RAD_S2 15.0f
 #define YAW_ACCELERATION_FF_CURRENT_LIMIT  16384.0f
-#define YAW_SPEED_KP_CURRENT_PER_RPM       225.0f
+#define YAW_SPEED_KP_CURRENT_PER_RPM       190.0f
 #define YAW_SPEED_KI_CURRENT_PER_RPM_S     15.0f
 #define YAW_SPEED_KD_CURRENT_S_PER_RPM      0.0f
 #define YAW_SPEED_INTEGRAL_LIMIT_CURRENT  16384.0f
 /* 克服 DM4310 与机构静摩擦的最小启动电流；目标速度为零时不生效。 */
 #define YAW_STARTUP_SPEED_THRESHOLD_RPM    0.20f
-#define YAW_STARTUP_MIN_CURRENT             280.0f
+#define YAW_STARTUP_MIN_CURRENT              80.0f
 /* DM4310 使用小端命令格式；1000 发送为 E8 03，并按 1000 接收，而不是
  * 字节交换后得到的错误值。 */
 #define YAW_CURRENT_OUTPUT_LIMIT          16384.0f
