@@ -155,17 +155,6 @@
 /* 位置环输出方向保护：误差仍大时，不允许 D 项把速度目标推成远离目标的方向。 */
 #define PITCH_POSITION_OUTPUT_DIRECTION_GUARD_ENABLE 1U
 #define PITCH_POSITION_OUTPUT_DIRECTION_GUARD_ERROR_DEG 0.6f
-/* 到位保持带：硬置零会在残余速度未完全消失时放开控制，实测会形成到位后波动；
- * 默认关闭，仅保留为回退开关。 */
-#define PITCH_SETTLE_HOLD_ENABLE             0U
-#define PITCH_SETTLE_HOLD_ENTER_ERROR_DEG    0.18f
-#define PITCH_SETTLE_HOLD_EXIT_ERROR_DEG     0.35f
-#define PITCH_SETTLE_HOLD_ENTER_SPEED_DEG_S 18.0f
-/* 旧近目标软限速在 0.6° 边界把速度指令从约 12 突然切回 26°/s，形成回摆；
- * 当前关闭，由连续位置 PI 和停车距离限速共同收速。 */
-#define PITCH_NEAR_TARGET_SPEED_CLAMP_ENABLE 0U
-#define PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG 0.6f
-#define PITCH_NEAR_TARGET_SPEED_LIMIT_DEG_S 12.0f
 /* 小误差低速静态纠偏：死区外连续增加补偿，误差超过 MAX 后保持端点值，
  * 不再在 MAX 边界突然撤掉。输出在电机指令域。 */
 #define PITCH_STATIC_ERROR_COMP_ENABLE      1U
@@ -212,20 +201,8 @@
 #define PITCH_APPROACH_HIGH_ANGLE_UP_ACCEL_SCALE  2.00f
 #define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_DELAY_S 0.055f
 /* 速度目标只向目标方向收缩，不生成反向速度。停车曲线计入控制响应延迟：
- * distance = |v|*delay + v^2/(2*a)。动态制动前馈与速度 PI 重复使用同一
- * 超速量，实测会造成到位前反转，因此关闭，仅由速度 PI 执行制动。 */
-#define PITCH_APPROACH_BRAKE_FF_ENABLE      0U
-#define PITCH_APPROACH_LOW_ANGLE_BRAKE_START_ERROR_DEG 6.0f
-#define PITCH_APPROACH_LOW_ANGLE_BRAKE_FULL_ERROR_DEG  4.0f
-#define PITCH_APPROACH_BRAKE_FF_STOP_SPEED_DEG_S 3.0f
-#define PITCH_APPROACH_DOWN_BRAKE_FF_GAIN       120.0f
-#define PITCH_APPROACH_DOWN_BRAKE_FF_LIMIT     8000.0f
-#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_FF_GAIN 180.0f
-#define PITCH_APPROACH_LOW_ANGLE_UP_BRAKE_FF_LIMIT 8000.0f
-#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_FF_GAIN 90.0f
-#define PITCH_APPROACH_HIGH_ANGLE_UP_BRAKE_FF_LIMIT 4500.0f
-/* 400000/s 等于每个 1 ms 控制周期最多变化 400 个电压指令单位。 */
-#define PITCH_APPROACH_BRAKE_FF_SLEW_VOLT_PER_S 400000.0f
+ * distance = |v|*delay + v^2/(2*a)。制动完全由速度 PI 与上面的接近目标限速
+ * 承担；动态制动前馈会与速度 PI 重复使用同一超速量、造成到位前反转，已删除。 */
 #define PITCH_SPEED_KP                    172.6f
 #define PITCH_SPEED_KI                      12.0f
 /* Pitch 速度环 D 项是“每 1 ms 拍的误差差量”：
@@ -238,14 +215,10 @@
  * 低频相位滞后大、外环 KP 一高就易起振。先收窄到 5，
  * 若积分抗静摩擦不足可再放回 10~20。 */
 #define PITCH_SPEED_INTEGRAL_SEPARATION_RPM 5.0f
-/* 起步助推“开关式”最小力矩：|速度指令|≥阈值 且 |PID输出|<下限时强制顶到 ±MIN，
- * 等于一个与 PID 增益无关的 bang-bang 继电器。
- * 实测它在目标附近保持时把 ±0.2~1° 误差变为 ±4~22°/s 指令（>1 阈值）后，
- * 输出被强制成 ±8000 满力矩来回打 → 形成 ~3.3~3.6 Hz、参数调不掉的非线性极限环
- * （pitch.csv）。故置 0 关闭。若阶跃起步出现静摩擦停顿，
- * 再开但把阈值提到 10~15°/s、下限降到 2000~4000 减小冲击。 */
-#define PITCH_STARTUP_SPEED_THRESHOLD_RPM   1.0f
-#define PITCH_STARTUP_MIN_VOLTAGE           0.0f
+/* 历史记录：曾有"起步助推"开关式最小力矩（|速度指令|≥1°/s 且 |PID输出|<下限时
+ * 强制顶到 ±8000）。实测它在目标附近把 ±0.2~1° 误差变成 3.3~3.6 Hz 非线性极限环
+ * （pitch.csv 佐证），已连同宏一起删除。若将来阶跃起步出现静摩擦停顿，
+ * 请用连续补偿处理（静差补偿 `PITCH_STATIC_ERROR_COMP_*`），不要再用 bang-bang 继电器。 */
 /* 位置环积分分离：大误差阶跃过程不积分，靠近目标后再用 I 消稳态误差。 */
 #define PITCH_ANGLE_INTEGRAL_SEPARATION_RAD (1.5f * TASK_DEG_TO_RAD)
 /* 预留的目标死区参数，当前未接入 Pitch 控制链。MISSION 要求保持在 ±0.2° 内，
@@ -331,27 +304,7 @@
 /* 0：Yaw 使用多圈编码器连续角度，不限制累计目标角。 */
 #define YAW_SOFT_LIMIT_DEG                  0.0f
 
-/* ---------------- 发射 M3508 ID2 速度环 PID ----------------
- * 阶跃指标：遥控 S2 从 1 拨到 3(0→6000rpm)，从接到指令到稳态 ≤150ms。
- * 3508.csv(2026-09-13 18:35) 实测旧参数(KP15/KI0.5/KD0/alpha0.20/分离1000)：
- * 90% 上升 85ms、峰值 6325rpm(+5.4%)@110ms、稳态 210ms。用同一份数据辨识：
- *  1) 被控对象 a = 4.98·I_实际 + 187 rpm/s(29 点最小二乘)，即 k_i=4.98 rpm/s
- *     per 电流单位；满命令 16384 时实际电流只有 ~14.7k(0rpm) 并随转速升到
- *     ~10.2k@5000rpm(反电动势/电调限流)；6000rpm 稳态约需 400 单位。
- *  2) 命令→实际转矩电流约 8~9ms 滞后：拿 I4(命令) 拟合加速度残差 9548，
- *     换 I5(实际电流) 在 lag=0 拟合残差 6360，说明是电调电流环跟不上命令。
- *  3) 那 5.4% 过冲 ≈ 上升期加速度 70000rpm/s × 低通 τ(alpha=0.20 → 5ms)。
- * 即瓶颈是"环路总延时 ≈ 电调 8ms + 低通 5ms"。纯 P 环只能靠降增益换稳定
- * (KD=0 时最坏 214ms，达不到 150ms)，对策是去掉低通滞后 + 加微分超前。
- *  KD 是"每拍误差差量"语义 kd·(e[k]-e[k-1])：1ms 周期下等效微分时间
- *  Td = kd·dt/KP = 100×0.001/18 ≈ 5.6ms，切勿按"每秒导数"当 100 用。
- *  KI 原 0.5 在该量纲下等于没有(补 400 单位要几十秒)，提到 20 才能让
- *  ±0.5%(30rpm) 的收尾也进 150ms。
- * 仿真(延时 6/8/10ms × 负载 300/400/600，共 9 工况)最坏：±1% 稳态 136ms、
- * ±0.5% 稳态 141ms、过冲 +0.21%、静差 ≤15rpm；旧参数同口径 164~312ms、
- * 过冲 +2.4~5.7%。
- * 代价：KD 会把转速反馈噪声放大成电流纹波(反馈 ±5rpm 时命令纹波 ~1300/16384)。
- * 若台架看到保持段电流持续 ±2000 以上来回跳，把 KD 降到 60(最坏 151ms)。 */
+/* ---------------- 发射 M3508 ID2 速度环 PID ----------------*/
 #define LAUNCH_M3508_ID2_SPEED_KP         18.0f
 #define LAUNCH_M3508_ID2_SPEED_KI         20.0f
 #define LAUNCH_M3508_ID2_SPEED_KD         100.0f
@@ -372,21 +325,7 @@
 #define LAUNCH_M3508_ID3_SPEED_LPF_ALPHA  0.50f
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
-/* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
- * 电机轴转速环。2006.csv(连发巡航段)显示本环一直在满电流换向：I6 有 47.6%
- * 的采样顶在 ±6500、平均每 2.5ms 反向一次，I5 在 ±1000rpm 抖。这是 P 环
- * 相位裕度不足造成的极限环，不是负载扰动——对象近似纯惯量(1/s)，叠加 1ms
- * 采样与电调命令+CAN 反馈约 2ms 的环路延时，开环为
- *   L(s) = KP·k_i/s · 1/(1+τs)，τ = dt/alpha，k_i = 21.077 rpm/s per 单位
- * (k_i 由 6.5A 下 0→3400rpm 约 28ms 实测反推)。
- *   KP=24, alpha=0.35 → 穿越频率 80Hz，相位裕度仅约 6°(计入 2ms 延时为负)
- *   → 任何扰动都被放大成满幅 bang-bang。
- * 注意 alpha 的方向与直觉相反：速度低通**不是**在抑制这个振荡，它的滞后正
- * 是振荡来源，alpha 越小相位裕度越低(0.35 时 τ=2.9ms，在 80Hz 处吃掉 55°)。
- * 现取 KP=12(内环 τ≈4ms，对 1.6Hz 的相位外环仍快 25 倍)、alpha=0.7：
- * 穿越频率 40Hz、相位裕度约 41~56°(视实际延时 1~2ms)，仿真中电流饱和占比
- * 1.5%→0.2%、反向 41Hz→1Hz、转速脉动 std 88→30rpm，且单发 40° 反而更快
- * (107ms→100ms、入死区速度更低、过冲仍为 0)。 */
+/* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------*/
 #define LAUNCH_M2006_ID5_SPEED_KP         12.0f
 #define LAUNCH_M2006_ID5_SPEED_KI         1.2f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
@@ -397,34 +336,17 @@
  * 电调转速噪声；取到 0.35 会因滞后把相位裕度吃光而重新起振。 */
 #define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.70f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
-
 /* ---------------- 拨弹 M2006 ID5 角度-速度双环 ----------------
  * 编码器在电机轴(8192 计数/圈)，拨盘在 P36 减速箱输出端(36:1)，
  * 输出角 = 电机角/36。S1 语义：1=保持(角度环)  2=连发(纯速度环 4800rpm=20Hz)
  * 3=单动(角度环)：每次从 1 拨到 3 触发一步 +40°输出。
  * 36:1 使电机端反射惯量放大 36²，动态变慢，比直驱更易控稳。 */
-#define M2006_ENCODER_COUNTS_PER_REV      8192.0f
 #define M2006_OUTPUT_GEAR_RATIO           36.0f
 #define LAUNCH_M2006_ID5_STEP_DEG         40.0f  /* 每发 = 输出轴 40° = 电机 1440° */
 /* 连发档名义转速 4800rpm(20Hz 步进)；实际由角度环追目标决定，上限
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
 #define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 60.0f
-/* 单发(S1=1→3)40° 阶跃整定。依据 2006.csv 实测 + 被控对象辨识：
- * 实测单发 275~320ms 才进 0.8° 死区，慢在两个地方：
- *  1) 限速 3400rpm = 输出 567°/s，"走完"40° 本身就要 70.6ms，是硬下限；
- *  2) 纯 P 角度环减速段是 τ=6/KP 的指数尾巴：KP=85 → τ=70ms，
- *     误差 40°→0.8° 需 ≈3.9τ ≈ 275ms，才是主要瓶颈。
- * 同一份数据辨识出的执行能力：6500(6.5A) 下 0→3400rpm 约 28ms，
- * 即 ≈1.25e5 rpm/s 加速、≈1.49e5 rpm/s 刹车(摩擦反向助力)。
- * 取 KP=300(τ=20ms)、限速 4200rpm(输出 700°/s)给加减速留距离。
- * 仿真(含 2ms 角度环、1ms 速度环、35rpm 断电门限)在反馈延迟 0~2ms、
- * 负载惯量 ±1 倍、摩擦 0~2 倍共 7 种工况下：进死区 ≈100~120ms，
- * 入死区速度 ≈700rpm，靠内环满电流刹车落在 40° 以内(过冲 ≤0.1°)。
- * 物理下限：40° = 电机 1440°，三角规划峰值需 ≈2× 平均转速，故
- * 6.5A 时 ≈76ms、C610 满 10A 时 ≈61ms；50ms 需 >13A，本硬件达不到。
- * 注意：这两个宏只用于 S1=1 保持 / S1=3 单动分支；连发 S1=2 走
- * CONT_PLL_KP 与 ANGLE_MAX_SPEED_RPM_CONT，不受本次修改影响。 */
 #define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 300.0f  /* 输出°→电机rpm：40°误差→12000rpm，被限速截到 4200 */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   4200.0f /* 单发限速：输出 700°/s，与 KP=300 的 20ms 尾巴配套 */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5600.0f /* 连发档提高追相位余量 */

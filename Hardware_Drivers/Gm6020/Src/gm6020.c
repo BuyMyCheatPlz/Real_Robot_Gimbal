@@ -88,12 +88,6 @@ int16_t GM6020_Update(GM6020_t *motor, float dt_s)
     output = feedback_output + motor->voltage_feedforward;
     if (output > GM6020_VOLTAGE_LIMIT) output = GM6020_VOLTAGE_LIMIT;
     if (output < -GM6020_VOLTAGE_LIMIT) output = -GM6020_VOLTAGE_LIMIT;
-    if (fabsf(motor->target_speed_rpm) >= PITCH_STARTUP_SPEED_THRESHOLD_RPM &&
-        fabsf(output) < PITCH_STARTUP_MIN_VOLTAGE)
-    {
-        output = (motor->target_speed_rpm > 0.0f) ?
-            PITCH_STARTUP_MIN_VOLTAGE : -PITCH_STARTUP_MIN_VOLTAGE;
-    }
     motor->last_feedback_output = feedback_output;
     motor->last_output = output;
     return (int16_t)output;

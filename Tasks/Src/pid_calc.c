@@ -224,26 +224,6 @@ static float pitch_position_output_direction_guard(float speed_target_deg_s,
     return speed_target_deg_s;
 }
 
-static float pitch_near_target_speed_clamp(float speed_target_deg_s,
-                                           float error_deg)
-{
-#if (PITCH_NEAR_TARGET_SPEED_CLAMP_ENABLE != 0U)
-    float abs_error = fabsf(error_deg);
-    if ((PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG > 0.0f) &&
-        (abs_error < PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG))
-    {
-        float limit = PITCH_NEAR_TARGET_SPEED_LIMIT_DEG_S *
-            abs_error / PITCH_NEAR_TARGET_SPEED_CLAMP_ERROR_DEG;
-        if (limit < 0.0f)
-            limit = 0.0f;
-        return clampf(speed_target_deg_s, limit);
-    }
-#else
-    (void)error_deg;
-#endif
-    return speed_target_deg_s;
-}
-
 static float position_pid(PositionPid_t *pid, float target, float measurement,
                           float dt)
 {
@@ -419,9 +399,6 @@ void PID_calc(void *argument)
     float pitch_profile_target = 0.0f;
     float pitch_profile_speed = 0.0f;
     float pitch_profile_acceleration = 0.0f;
-#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
-    uint8_t pitch_settle_hold_active = 0U;
-#endif
     float pitch_gravity_angle_offset = 0.0f;
     float pitch_trajectory_max_speed = PITCH_TRAJECTORY_MAX_SPEED_RAD_S;
     float pitch_trajectory_max_accel = PITCH_TRAJECTORY_MAX_ACCEL_RAD_S2;
@@ -625,9 +602,6 @@ void PID_calc(void *argument)
                     {
                         reset_position_pid(&pitch_angle_pid);
                         PitchApproach_Reset(&pitch_approach_state);
-#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
-                        pitch_settle_hold_active = 0U;
-#endif
                         pitch_profile_speed = 0.0f;
                         pitch_profile_acceleration = 0.0f;
                     }
@@ -764,9 +738,6 @@ void PID_calc(void *argument)
                 pitch_encoder_initialized = 0U;
                 reset_position_pid(&pitch_angle_pid);
                 PitchApproach_Reset(&pitch_approach_state);
-#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
-                pitch_settle_hold_active = 0U;
-#endif
                 MotorSpeedPid_Reset(&can1_gm6020_id2.speed_pid);
                 can1_gm6020_id2.output_hold = 0U;   /* 失去控制权即解除锁存 */
                 pitch_hold_active = 0U;
@@ -1099,47 +1070,19 @@ void PID_calc(void *argument)
                                     pitch_angle_actual) * RAD_TO_DEG;
                                 pitch_actual_speed_deg_s =
                                     bmi_roll_rate_rad_s * RAD_TO_DEG;
-#if (PITCH_SETTLE_HOLD_ENABLE != 0U)
-                                if (pitch_settle_hold_active != 0U)
-                                {
-                                    if (fabsf(pitch_error_deg) >
-                                        PITCH_SETTLE_HOLD_EXIT_ERROR_DEG)
-                                    {
-                                        pitch_settle_hold_active = 0U;
-                                    }
-                                }
-                                else if ((fabsf(pitch_error_deg) <=
-                                          PITCH_SETTLE_HOLD_ENTER_ERROR_DEG) &&
-                                         (fabsf(pitch_actual_speed_deg_s) <=
-                                          PITCH_SETTLE_HOLD_ENTER_SPEED_DEG_S))
-                                {
-                                    pitch_settle_hold_active = 1U;
-                                    reset_position_pid(&pitch_angle_pid);
-                                }
-                                if (pitch_settle_hold_active != 0U)
-                                {
-                                    reset_position_pid(&pitch_angle_pid);
-                                    PitchApproach_Reset(
-                                        &pitch_approach_state);
-                                    pitch_speed_target_rpm = 0.0f;
-                                }
-                                else
-#endif
-                                {
-                            pitch_speed_target_rpm =
-                                pitch_position_output_direction_guard(
-                                    pitch_speed_target_rpm,
-                                    pitch_error_deg);
-                            pitch_speed_target_rpm =
-                                pitch_near_target_speed_clamp(
-                                    pitch_speed_target_rpm,
-                                    pitch_error_deg);
-                            pitch_speed_target_rpm =
-                                PitchApproach_LimitSpeed(
-                                    pitch_speed_target_rpm,
-                                    pitch_error_deg,
-                                    pitch_angle_actual * RAD_TO_DEG);
-                                }
+                                /* 位置环输出方向保护：误差仍大时不允许 D 项把速度
+                                 * 目标推成远离目标的方向。 */
+                                pitch_speed_target_rpm =
+                                    pitch_position_output_direction_guard(
+                                        pitch_speed_target_rpm,
+                                        pitch_error_deg);
+                                /* 接近目标动态限速：按含响应延迟的停车距离反解允许
+                                 * 速度，只收缩、不生成反向速度目标。 */
+                                pitch_speed_target_rpm =
+                                    PitchApproach_LimitSpeed(
+                                        pitch_speed_target_rpm,
+                                        pitch_error_deg,
+                                        pitch_angle_actual * RAD_TO_DEG);
                             }
                             if (PITCH_SPEED_LIMIT_ENABLE != 0U)
                             {
@@ -1154,16 +1097,11 @@ void PID_calc(void *argument)
                             pitch_angle_actual + pitch_gravity_angle_offset);
                         pitch_motor_feedforward = gravity_feedforward;
 #if (PITCH_GRAVITY_ONLY_ENABLE == 0U)
+                        /* 小误差静差补偿是唯一叠加在重力前馈之上的补偿项（带变化率
+                         * 限制的状态量）。制动由速度 PI 与接近目标动态限速承担，
+                         * 不再叠加动态制动前馈。 */
                         pitch_motor_feedforward +=
                             PitchApproach_UpdateStaticErrorComp(
-                                &pitch_approach_state,
-                                pitch_error_deg,
-                                pitch_angle_actual * RAD_TO_DEG,
-                                pitch_actual_speed_deg_s,
-                                PITCH_CONTROL_TO_MOTOR_SIGN,
-                                control_dt_s);
-                        pitch_motor_feedforward +=
-                            PitchApproach_UpdateBrakeFeedforward(
                                 &pitch_approach_state,
                                 pitch_error_deg,
                                 pitch_angle_actual * RAD_TO_DEG,
