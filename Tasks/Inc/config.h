@@ -346,16 +346,29 @@
 #define LAUNCH_M3508_ID3_DIRECTION       (-1.0f)
 
 /* ---------------- 拨弹 M2006 ID5 速度环 PID ----------------
- * 电机轴转速环。最新 2006.csv 显示保持段速度环正负满电流换向，说明零速
- * 制动过硬。当前降低 P/I 与输出限幅，优先消除到位抖动。 */
-#define LAUNCH_M2006_ID5_SPEED_KP         24.0f
+ * 电机轴转速环。2006.csv(连发巡航段)显示本环一直在满电流换向：I6 有 47.6%
+ * 的采样顶在 ±6500、平均每 2.5ms 反向一次，I5 在 ±1000rpm 抖。这是 P 环
+ * 相位裕度不足造成的极限环，不是负载扰动——对象近似纯惯量(1/s)，叠加 1ms
+ * 采样与电调命令+CAN 反馈约 2ms 的环路延时，开环为
+ *   L(s) = KP·k_i/s · 1/(1+τs)，τ = dt/alpha，k_i = 21.077 rpm/s per 单位
+ * (k_i 由 6.5A 下 0→3400rpm 约 28ms 实测反推)。
+ *   KP=24, alpha=0.35 → 穿越频率 80Hz，相位裕度仅约 6°(计入 2ms 延时为负)
+ *   → 任何扰动都被放大成满幅 bang-bang。
+ * 注意 alpha 的方向与直觉相反：速度低通**不是**在抑制这个振荡，它的滞后正
+ * 是振荡来源，alpha 越小相位裕度越低(0.35 时 τ=2.9ms，在 80Hz 处吃掉 55°)。
+ * 现取 KP=12(内环 τ≈4ms，对 1.6Hz 的相位外环仍快 25 倍)、alpha=0.7：
+ * 穿越频率 40Hz、相位裕度约 41~56°(视实际延时 1~2ms)，仿真中电流饱和占比
+ * 1.5%→0.2%、反向 41Hz→1Hz、转速脉动 std 88→30rpm，且单发 40° 反而更快
+ * (107ms→100ms、入死区速度更低、过冲仍为 0)。 */
+#define LAUNCH_M2006_ID5_SPEED_KP         12.0f
 #define LAUNCH_M2006_ID5_SPEED_KI         1.2f
 #define LAUNCH_M2006_ID5_SPEED_KD         0.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_LIMIT   1000.0f
 #define LAUNCH_M2006_ID5_OUTPUT_LIMIT     6500.0f
 #define LAUNCH_M2006_ID5_INTEGRAL_SEPARATION_RPM 0.0f
-/* 速度滤波 alpha 越小越稳。拨盘到位附近优先抑制速度噪声放大。 */
-#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.35f
+/* 速度滤波 alpha：0.7(τ≈1.4ms)。取 1.0 还能再多 ~5° 相位裕度，但完全不过滤
+ * 电调转速噪声；取到 0.35 会因滞后把相位裕度吃光而重新起振。 */
+#define LAUNCH_M2006_ID5_SPEED_LPF_ALPHA  0.70f
 #define LAUNCH_M2006_ID5_DIRECTION        1.0f
 
 /* ---------------- 拨弹 M2006 ID5 角度-速度双环 ----------------
@@ -370,8 +383,23 @@
  * ANGLE_MAX_SPEED_RPM_CONT。 */
 #define LAUNCH_M2006_ID5_CONTINUOUS_SPEED_RPM 4800.0f
 #define LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG 60.0f
-#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 85.0f   /* 输出°→电机rpm：40°误差→3400rpm */
-#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   3400.0f /* 单动补偿降内环后的速度损失 */
+/* 单发(S1=1→3)40° 阶跃整定。依据 2006.csv 实测 + 被控对象辨识：
+ * 实测单发 275~320ms 才进 0.8° 死区，慢在两个地方：
+ *  1) 限速 3400rpm = 输出 567°/s，"走完"40° 本身就要 70.6ms，是硬下限；
+ *  2) 纯 P 角度环减速段是 τ=6/KP 的指数尾巴：KP=85 → τ=70ms，
+ *     误差 40°→0.8° 需 ≈3.9τ ≈ 275ms，才是主要瓶颈。
+ * 同一份数据辨识出的执行能力：6500(6.5A) 下 0→3400rpm 约 28ms，
+ * 即 ≈1.25e5 rpm/s 加速、≈1.49e5 rpm/s 刹车(摩擦反向助力)。
+ * 取 KP=300(τ=20ms)、限速 4200rpm(输出 700°/s)给加减速留距离。
+ * 仿真(含 2ms 角度环、1ms 速度环、35rpm 断电门限)在反馈延迟 0~2ms、
+ * 负载惯量 ±1 倍、摩擦 0~2 倍共 7 种工况下：进死区 ≈100~120ms，
+ * 入死区速度 ≈700rpm，靠内环满电流刹车落在 40° 以内(过冲 ≤0.1°)。
+ * 物理下限：40° = 电机 1440°，三角规划峰值需 ≈2× 平均转速，故
+ * 6.5A 时 ≈76ms、C610 满 10A 时 ≈61ms；50ms 需 >13A，本硬件达不到。
+ * 注意：这两个宏只用于 S1=1 保持 / S1=3 单动分支；连发 S1=2 走
+ * CONT_PLL_KP 与 ANGLE_MAX_SPEED_RPM_CONT，不受本次修改影响。 */
+#define LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG 300.0f  /* 输出°→电机rpm：40°误差→12000rpm，被限速截到 4200 */
+#define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM   4200.0f /* 单发限速：输出 700°/s，与 KP=300 的 20ms 尾巴配套 */
 #define LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT 5600.0f /* 连发档提高追相位余量 */
 #define LAUNCH_M2006_ID5_AUTO_STEP_PERIOD_MS   50U        /* 连发档步进周期 = 20Hz */
 #define LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG    0.8f  /* 单发必须走满 40°；松手后继续追目标，死区只留防微抖余量 */

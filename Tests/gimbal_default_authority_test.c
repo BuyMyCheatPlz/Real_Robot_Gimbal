@@ -208,14 +208,18 @@ int main(void)
     assert(YAW_SPEED_INTEGRAL_LIMIT_CURRENT <=
            YAW_CURRENT_OUTPUT_LIMIT);
 
-    assert(LAUNCH_M2006_ID5_SPEED_KP == 24.0f);
+    /* 速度环 KP=12 / LPF alpha=0.7 见 config.h：原 24/0.35 相位裕度只有几度，
+     * 连发巡航段 I6 满电流换向。 */
+    assert(LAUNCH_M2006_ID5_SPEED_KP == 12.0f);
     assert(LAUNCH_M2006_ID5_SPEED_KI == 1.2f);
     assert(LAUNCH_M2006_ID5_INTEGRAL_LIMIT == 1000.0f);
     assert(LAUNCH_M2006_ID5_OUTPUT_LIMIT == 6500.0f);
-    assert(LAUNCH_M2006_ID5_SPEED_LPF_ALPHA == 0.35f);
+    assert(LAUNCH_M2006_ID5_SPEED_LPF_ALPHA == 0.70f);
     assert(LAUNCH_M2006_ID5_CONT_PLL_KP_RPM_PER_DEG == 60.0f);
-    assert(LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG == 85.0f);
-    assert(LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM == 3400.0f);
+    /* 单发角度环：KP=300 / 限速 4200rpm 见 config.h 的整定说明
+     * (2006.csv 实测 300ms → 仿真鲁棒工况 100~120ms)。 */
+    assert(LAUNCH_M2006_ID5_ANGLE_KP_RPM_PER_DEG == 300.0f);
+    assert(LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM == 4200.0f);
     assert(LAUNCH_M2006_ID5_ANGLE_MAX_SPEED_RPM_CONT == 5600.0f);
     assert(LAUNCH_M2006_ID5_ANGLE_DEADBAND_DEG == 0.8f);
     assert(M2006_STOP_DEADBAND_RPM == 35.0f);
